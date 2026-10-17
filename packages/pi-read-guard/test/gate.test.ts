@@ -108,7 +108,7 @@ describe("decideWriteGate 判定表", () => {
     });
     expect(decision.action).toBe("block");
     expect(decision.code).toBe("not_read");
-    expect(decision.reason).toContain("尚未在本会话中读取");
+    expect(decision.reason).toContain("has not been read in this session");
   });
 
   test("截断读 → 阻断 truncated_read（edit 与 write 同一套规则）", () => {
@@ -120,7 +120,7 @@ describe("decideWriteGate 判定表", () => {
       entry: entry({ kind: "truncated" }),
     });
     expect(decision.code).toBe("truncated_read");
-    expect(decision.reason).toContain("截断");
+    expect(decision.reason).toContain("was truncated");
   });
 
   test("mtime 相等 → 放行（范围读也放行）", () => {
@@ -166,7 +166,7 @@ describe("decideWriteGate 判定表", () => {
       entry: entry({ mtimeMs: 1_000, contentHash: hashContent("hello") }),
     });
     expect(decision.code).toBe("modified_since_read");
-    expect(decision.reason).toContain("被改动过");
+    expect(decision.reason).toContain("changed after you read it");
   });
 
   test("mtime 前进 + 范围读 → 阻断（范围读没有 hash，不能走逃逸）", () => {

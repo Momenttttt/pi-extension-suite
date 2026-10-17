@@ -10,13 +10,13 @@ import { defaultPlaceholder } from "./clear.ts";
 
 export interface ContextGuardConfig {
   enabled: boolean;
-  /** 最近 N 个可清理结果不动（下限 1，对齐 CC 冷路径 keepRecent 的语义：条数，不是 token）。 */
+  /** 最近 N 个可清理结果不动（下限 1）。语义是**条数**，不是 token。 */
   keepRecent: number;
   /** 体积档阈值：保留尾部之外的可清理正文合计超过它才触发（默认 256 KiB）。 */
   maxClearableBytes: number;
   /** 空闲档：距上一条 assistant 消息的空闲分钟数（默认 60，即服务端 prompt 缓存 TTL）。 */
   gapThresholdMinutes: number;
-  /** 体积档是否自动（默认 false：会话中途改写历史与 CC 默认不一致，留给手动 `/ctx prune`）。 */
+  /** 体积档是否自动（默认 false：会话中途改写历史风险偏高，留给手动 `/ctx prune`）。 */
   autoVolumeTrigger: boolean;
   /** 插件 04 的 `subagent` 结果是否可清理（默认 false）。 */
   clearSubagentResults: boolean;

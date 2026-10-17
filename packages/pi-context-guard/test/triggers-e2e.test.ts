@@ -152,7 +152,7 @@ describe("体积档：/ctx prune 手动", () => {
     expect(commonPrefixMessages(afterCompact, next)).toBe(afterCompact.messages.length);
   });
 
-  test("/ctx 状态命令可运行（打印占用、统计、CC 对照与子命令）", async () => {
+  test("/ctx 状态命令可运行（打印占用、统计、阈值对照与子命令）", async () => {
     const cwd = workspace();
     writeFileSync(join(cwd, "a.txt"), "hi\n", "utf8");
     const test = await sessionIn(cwd, [{ text: "ok" }]);

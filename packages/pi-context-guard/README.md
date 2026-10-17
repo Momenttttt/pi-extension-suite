@@ -31,7 +31,7 @@ pi -e ./packages/pi-context-guard/extensions/context-guard.ts
 
 ### 哪些工具的结果会被清理
 
-对齐 Claude Code 的清单：`read`、`bash`、`powershell`、`grep`、`find`、`ls`、`edit`、`write` 会；MCP 工具、`codemode`、`tool_search` **不会**（非幂等/不可重跑风险高）。
+判定口径是"输出可重跑或可重建"：`read`、`bash`、`powershell`、`grep`、`find`、`ls`、`edit`、`write` 会；MCP 工具、`codemode`、`tool_search` **不会**（非幂等/不可重跑风险高）。
 
 两个本套件自己的工具默认**不清理**，可配置打开：
 
@@ -75,7 +75,7 @@ pi -e ./packages/pi-context-guard/extensions/context-guard.ts
 
 ## `/ctx`
 
-一条命令看清状态：上下文占用（tokens / 窗口 / 百分比）、本会话清理统计（条数与省下的字节）、裁剪条数、压缩失败次数、CC 对照提示。
+一条命令看清状态：上下文占用（tokens / 窗口 / 百分比）、本会话清理统计（条数与省下的字节）、裁剪条数、压缩失败次数、自动压缩阈值的对照提示。
 
 > **`/ctx prune` 和 pi 内建的 `/compact` 不是一回事，别混。**
 > `/compact`（pi 自带）会**调用模型**把较早的历史总结成摘要——有损、不可撤销，而且它才是真正决定"自动压缩什么时候触发"的那套账。
@@ -88,19 +88,19 @@ pi -e ./packages/pi-context-guard/extensions/context-guard.ts
 ## 设计取舍
 
 **为什么默认救不了正在跑的长会话？**
-空闲档只在会话空闲 ≥ 60 分钟后才动手——这是与 Claude Code 默认保持一致，也因为它让改写历史前缀的代价落在缓存本来就冷的时候。**代价必须说清：一个持续活跃、图片越堆越多的会话不会被自动救**，需要手动 `/ctx prune` 一次，或者打开 `autoVolumeTrigger`。装上本包不等于"再也不会撞字节墙"。
+空闲档只在会话空闲 ≥ 60 分钟后才动手——因为服务端 prompt 缓存的 TTL 是 1 小时，空闲到这个点缓存本来就冷，此时改写历史前缀的代价最低。**代价必须说清：一个持续活跃、图片越堆越多的会话不会被自动救**，需要手动 `/ctx prune` 一次，或者打开 `autoVolumeTrigger`。装上本包不等于"再也不会撞字节墙"。
 
 **为什么 `snip` 工具一直对模型可见，而不是按需激活？**
 按需激活（注册为 `deferred`，上下文用量超阈值时用 `pi.setActiveTools()` 打开）会**改变工具列表**。pi 会为工具集变化在转录里追加记录，provider 无法表达该增量时会收到完整检查点，**可能作废缓存前缀**——省下的提示词成本不如缓存失效亏得多。代价是每轮多几十 token 的提示词，接受。
 
 **为什么清理不会清空 pi-read-guard 的读态？**
-清理是"这次请求给模型看什么"的优化，不是磁盘世界变了。pi-read-guard 的读态表因此不随之失效（这一点与 Claude Code 的"压缩即清空读态"相反）。若模型据此编辑文件，mtime 校验仍是最后防线。
+清理是"这次请求给模型看什么"的优化，不是磁盘世界变了。所以 pi-read-guard 的读态表**不**随之失效——即使某个工具结果被换成了占位符，模型仍然算"读过那个文件"。若它据此编辑文件，mtime 校验仍是最后防线。
 
 **为什么压缩失败不做"跳过"而是"降压力"？**
 本机实测（`test/compaction-fuse.test.ts`）：在 `reason: "threshold"` 场景下让 `session_before_compact` 返回 `{ cancel: true }`，pi 会抛 `Compaction cancelled` 并立刻吞掉、发一条 `session_compact_failed`（`aborted: true`、`errorMessage: undefined`），**不压缩、不重试**；下一轮只要上下文还超阈值就再取消一次，于是上下文继续涨到 overflow。overflow 路径上取消更糟——那是唯一一次 compact-and-retry 恢复机会。所以本插件**从不返回 cancel**：失败被计数、显示在 `/ctx`，下一次请求改为强制按体积档先清一次（真的降低压力），连续 ≥3 次时在 UI 明确告警。
 
 **为什么不是"重写 pi 的 compaction"？**
-核对后，Claude Code 五层管线里已有三层被 pi 原生覆盖且质量不低（阈值触发、overflow 恢复、与 CC 基本同构的摘要结构 + 迭代式更新）。真正缺的只有微压缩、裁剪与跨工具结果预算。重写已有的三层会把维护成本翻倍而收益近零。
+pi 原生已经覆盖了三层（阈值触发、overflow 恢复、摘要结构 + 迭代式更新），且质量不低；真正缺的只有微压缩、裁剪与跨工具结果预算。重写已有那三层会把维护成本翻倍而收益近零。
 
 ## 边界与已知限制
 

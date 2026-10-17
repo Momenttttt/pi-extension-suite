@@ -51,7 +51,7 @@ function assistant(timestamp: number): MessageLike {
 }
 
 describe("可清理工具白名单", () => {
-  test("对齐 CC 的基础白名单全部可清理", () => {
+  test("基础白名单（可重跑/可重建的那批工具）全部可清理", () => {
     for (const name of ["read", "bash", "powershell", "grep", "find", "ls", "edit", "write"]) {
       expect(isClearableToolName(name, OPTIONS), name).toBe(true);
     }

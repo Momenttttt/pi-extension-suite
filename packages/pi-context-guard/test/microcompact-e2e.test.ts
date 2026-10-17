@@ -117,9 +117,9 @@ describe("含图片 read 的会话：清理后请求显著变小", () => {
 
     const clearedId = clearedToolCallIds(third)[0] ?? "";
     const content = toolResultContent(third, clearedId) as Array<{ type?: string; text?: string }>;
-    expect(content[0]?.text).toContain("较早的工具结果已清理");
+    expect(content[0]?.text).toContain("Earlier tool result cleared");
     expect(content[0]?.text).toContain("read");
-    expect(content[0]?.text).toContain("需要时重新执行该工具即可");
+    expect(content[0]?.text).toContain("Re-run that tool if you need the output again");
   });
 
   test("不落盘：会话条目里的原文（含图片 base64）原样保留", async () => {

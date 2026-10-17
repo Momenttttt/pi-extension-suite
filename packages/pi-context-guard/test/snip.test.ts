@@ -123,7 +123,7 @@ describe("区间解析与校验", () => {
     const resolved = resolveSnipTargets(items, "zzzzzz", u2);
     expect(resolved.ok).toBe(false);
     if (resolved.ok) return;
-    expect(resolved.error).toContain("找不到短 id");
+    expect(resolved.error).toContain("No such short id");
     expect(resolved.error).toContain(u1);
     expect(resolved.available).toEqual([u1, u2, u3]);
   });
@@ -132,14 +132,14 @@ describe("区间解析与校验", () => {
     const resolved = resolveSnipTargets(items, u2, u1);
     expect(resolved.ok).toBe(false);
     if (resolved.ok) return;
-    expect(resolved.error).toContain("区间顺序错误");
+    expect(resolved.error).toContain("Bad range");
   });
 
   test("不能裁当前回合：区间终点是本回合的用户消息", () => {
     const resolved = resolveSnipTargets(items, u1, u3);
     expect(resolved.ok).toBe(false);
     if (resolved.ok) return;
-    expect(resolved.error).toContain("不能裁剪当前回合");
+    expect(resolved.error).toContain("Cannot snip the current turn");
   });
 
   test("时间戳撞车导致 id 歧义时拒绝，而不是猜一个", () => {
@@ -151,14 +151,14 @@ describe("区间解析与校验", () => {
     const resolved = resolveSnipTargets(duplicated, shortIdOf("user", 5_000), shortIdOf("user", 5_000));
     expect(resolved.ok).toBe(false);
     if (resolved.ok) return;
-    expect(resolved.error).toContain("对应多条消息");
+    expect(resolved.error).toContain("matches more than one message");
   });
 
   test("没有用户消息时给出空列表提示", () => {
     const resolved = resolveSnipTargets([{ entryId: "a1", message: assistant(1) }], "abcdef", "abcdef");
     expect(resolved.ok).toBe(false);
     if (resolved.ok) return;
-    expect(resolved.error).toContain("找不到短 id");
+    expect(resolved.error).toContain("No such short id");
     expect(resolved.available).toEqual([]);
   });
 

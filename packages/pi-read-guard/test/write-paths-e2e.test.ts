@@ -58,9 +58,9 @@ describe("票据 03：写入成功后更新读水位", () => {
 
     await test.run("overwrite twice");
     // 第一次阻断（未读），因为我们从没读过它
-    expect(test.requests[1]?.allText).toContain("尚未在本会话中读取");
+    expect(test.requests[1]?.allText).toContain("has not been read in this session");
     // 第二次仍然阻断：第一次被拦下了，不构成读水位
-    expect(test.requests[2]?.allText).toContain("尚未在本会话中读取");
+    expect(test.requests[2]?.allText).toContain("has not been read in this session");
     expect(readFileSync(file, "utf8")).toBe("one\n");
   });
 
@@ -110,7 +110,7 @@ describe("票据 03：截断读（对 edit 与 write 都拒）", () => {
     ]);
 
     await test.run("read the big file then clobber it");
-    expect(test.requests[2]?.allText).toContain("截断");
+    expect(test.requests[2]?.allText).toContain("was truncated");
     expect(test.requests[2]?.allText).toContain("read-guard: truncated_read");
     expect(readFileSync(big, "utf8")).not.toBe("clobbered\n");
   });

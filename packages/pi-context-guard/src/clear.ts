@@ -15,7 +15,7 @@
 import { contentByteSize, isRecord, isToolResultMessage, type MessageLike } from "./messages.ts";
 
 /**
- * 基础可清理工具，对齐 Claude Code 的 `COMPACTABLE_TOOLS`（设计 §2.4 的映射表）：
+ * 基础可清理工具的判定口径是“输出可重跑或可重建”：
  * `FileRead, Bash, PowerShell, Grep, Glob, WebSearch, WebFetch, FileEdit, FileWrite`
  * → pi 侧 `read / bash / powershell / grep / find / ls / edit / write`。
  *
@@ -32,7 +32,7 @@ export const BASE_CLEARABLE_TOOLS: readonly string[] = [
   "write",
 ];
 
-/** MCP 工具永不清理：非幂等/不可重跑风险高，对齐 CC 排除 MCP 的立场。 */
+/** MCP 工具永不清理：非幂等、不可重跑的风险太高，清掉可能就再也拿不回来。 */
 export const MCP_TOOL_PREFIX = "mcp__";
 
 /** 工具编排入口永不清理：它们的输出是"如何继续"的结构化结论，重跑代价高。 */
@@ -46,12 +46,20 @@ export interface ClearableToolOptions {
   clearMemoryResults: boolean;
 }
 
-/** 占位符开头（检测"已清理过"用的稳定前缀；文案本体见 DEFAULT_PLACEHOLDER）。 */
-export const PLACEHOLDER_LEAD = "[较早的工具结果已清理";
+/**
+ * 占位符开头。这是个稳定前缀：检测“这段内容是否已经是我们写的占位符”靠它，
+ * 所以改文案时它必须跟着一起改。
+ */
+export const PLACEHOLDER_LEAD = "[Earlier tool result cleared";
 
-/** 占位符文案：本项目自写，不逐字搬 CC 的 `[Old tool result content cleared]`。 */
+/**
+ * 模型看到的占位符文案（英文——这是给模型读的）。
+ *
+ * 必须说清两件事：这段内容是被主动清掉的（不是工具本身返回了空），以及**需要时可以重新执行**。
+ * 少了后半句，模型会以为原始输出本来就没有，从而在错误的假设上继续干活。
+ */
 export function defaultPlaceholder(toolName: string): string {
-  return `${PLACEHOLDER_LEAD}以节省上下文：${toolName}。需要时重新执行该工具即可]`;
+  return `${PLACEHOLDER_LEAD} to save context: ${toolName}. Re-run that tool if you need the output again]`;
 }
 
 /** 该内容是否已经是本插件写的占位符（已清理过的不重复处理）。 */

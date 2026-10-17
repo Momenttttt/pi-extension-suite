@@ -4,7 +4,7 @@
  * 术语（GLOSSARY）：裁剪 = 由模型指认一段历史，让它在模型上下文里消失；不总结、不改写、
  * 可撤销。**不是删除历史**——原始条目仍在会话文件里；也**不是压缩**（压缩是有损总结）。
  *
- * 短 id 对齐 CC 的做法：只给**用户消息**追加 `\n[id:xxxxxx]`，只改请求副本，存储不动；
+ * 短 id 只给**用户消息**追加 `\n[id:xxxxxx]`，而且只改请求副本，存储不动；
  * id 由消息的稳定属性派生（`sha256(role + ":" + timestamp)` 前 6 位 base36）。
  * 不用会话条目 id 的原因：`context` 回调里拿不到条目 id（设计 §3.2）。
  */
@@ -111,28 +111,28 @@ export function resolveSnipTargets(
     const missing = fromIndex < 0 ? from : to;
     return {
       ok: false,
-      error: `找不到短 id：${missing}。可用 id（按时间顺序）：${formatAvailable(anchors)}`,
+      error: `No such short id: ${missing}. Available ids (in time order): ${formatAvailable(anchors)}`,
       available,
     };
   }
   if (countMatches(anchors, from) > 1 || countMatches(anchors, to) > 1) {
     return {
       ok: false,
-      error: "该短 id 对应多条消息（时间戳相同），无法确定端点。请换用另一个 id。",
+      error: "That short id matches more than one message (identical timestamps), so the endpoint is ambiguous. Use a different id.",
       available,
     };
   }
   if (fromIndex > toIndex) {
     return {
       ok: false,
-      error: `区间顺序错误：from 必须早于 to。可用 id（按时间顺序）：${formatAvailable(anchors)}`,
+      error: `Bad range: from must come before to. Available ids (in time order): ${formatAvailable(anchors)}`,
       available,
     };
   }
   if (toIndex === anchors.length - 1) {
     return {
       ok: false,
-      error: `不能裁剪当前回合：${to} 是本回合的用户消息。只能裁它之前的历史。可用 id（按时间顺序）：${formatAvailable(anchors)}`,
+      error: `Cannot snip the current turn: ${to} is this turn's user message. Only earlier history can be snipped. Available ids (in time order): ${formatAvailable(anchors)}`,
       available,
     };
   }
@@ -159,8 +159,8 @@ function countMatches(anchors: readonly UserAnchor[], id: string): number {
 }
 
 function formatAvailable(anchors: readonly UserAnchor[]): string {
-  if (anchors.length === 0) return "（无，还没有带时间戳的用户消息）";
-  return anchors.map((anchor) => `${anchor.id}「${anchor.preview}」`).join("、");
+  if (anchors.length === 0) return "(none: no user message with a timestamp yet)";
+  return anchors.map((anchor) => `${anchor.id} "${anchor.preview}"`).join(", ");
 }
 
 function previewOf(message: MessageLike): string {
@@ -173,7 +173,7 @@ function previewOf(message: MessageLike): string {
             .map((block) =>
               typeof block === "object" && block !== null && (block as { type?: unknown }).type === "text"
                 ? String((block as { text?: unknown }).text ?? "")
-                : "[图片]",
+                : "[image]",
             )
             .join("")
         : "";

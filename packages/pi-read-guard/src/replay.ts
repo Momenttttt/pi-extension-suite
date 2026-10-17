@@ -8,14 +8,14 @@
  *
  * 两条硬要求：
  *
- * 1. **只信结构化字段，绝不去解析工具输出的文本。** ZCode 的
- *    `17-read-file-state-resume.md` 明确要求这一点——工具输出是给人看的，格式随时可改。
+ * 1. **只信结构化字段，绝不去解析工具输出的文本。** 工具输出是给人看的，格式随时可改；
+ *    照着它做解析，改一次措辞就可能悄悄失效。
  *
  * 2. **会话文件里没有"读时的 mtime"**（本机 pi 1.3.0 会话实测：`toolResult` 只带
  *    `toolCallId` / `toolName` / `details` / `isError`）。所以路径与 `offset`/`limit`
  *    要从**同一 `toolCallId` 的助手 ToolCall**里取，而水位只能用该 toolResult 消息的
- *    `timestamp` 当估计值——与 CC 的 re-seed 同一取舍。这带来的误判方向是安全的：
- *    文件在会话挂起期间被改动、改动时间早于该消息时间戳时，会被判成"新鲜"。
+ *    `timestamp` 当估计值。这带来的误判方向是安全的：文件在会话挂起期间被改动、
+ *    改动时间早于该消息时间戳时，会被判成"新鲜"——偏宽松，不会让人被莫名拦下。
  */
 import { hashContent, normalizePathKey, type ReadKind, type ReadStateEntry } from "./gate.ts";
 
@@ -87,7 +87,7 @@ function collectToolCalls(entries: readonly SessionEntryLike[]): Map<string, Too
  *
  * 规则（设计 §5）：
  *   - 完整 `read`：水位用该 toolResult 消息的 `timestamp`，hash 由转录里的内容重算
- *   - 范围读：跳过（与 CC 一致：范围读不是 resume 后的合格水位）
+ *   - 范围读：跳过（范围读不是 resume 后的合格水位）
  *   - 截断读：恢复为 `truncated`
  *   - `write`：hash 由 tool input 的 `content` 重算
  *   - `edit`：不记 hash

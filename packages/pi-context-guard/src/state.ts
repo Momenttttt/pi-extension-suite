@@ -231,7 +231,7 @@ function stringArray(value: unknown): string[] {
 /**
  * 是否该就连续压缩失败明确告警。
  *
- * 对齐 CC 的 `MAX_CONSECUTIVE_AUTOCOMPACT_FAILURES = 3`：达到 3 次起告警，
+ * 连续失败到 3 次起开始告警，
  * 之后每 3 次再提醒一次（避免每轮刷屏）。这里只管阈值判断，告警文案在扩展层。
  */
 export function shouldWarnCompactionFailures(failures: number): boolean {

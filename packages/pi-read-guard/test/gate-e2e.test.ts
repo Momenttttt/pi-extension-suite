@@ -72,7 +72,7 @@ describe("read-guard 门禁（未读 / 已读）", () => {
     await test.run("overwrite a.txt");
     expect(test.requests).toHaveLength(2);
     // 第二次请求里应该出现阻断文案（工具结果），且文件内容没变
-    expect(test.requests[1]?.allText).toContain("尚未在本会话中读取");
+    expect(test.requests[1]?.allText).toContain("has not been read in this session");
     expect(readFileSync(join(cwd, "a.txt"), "utf8")).toBe("original\n");
   });
 
@@ -87,7 +87,7 @@ describe("read-guard 门禁（未读 / 已读）", () => {
 
     await test.run("read then overwrite a.txt");
     const third = test.requests[2];
-    expect(third?.allText).not.toContain("尚未在本会话中读取");
+    expect(third?.allText).not.toContain("has not been read in this session");
     expect(readFileSync(join(cwd, "a.txt"), "utf8")).toBe("overwritten\n");
   });
 

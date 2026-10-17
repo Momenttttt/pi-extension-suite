@@ -70,7 +70,7 @@ describe("snip：裁剪一段历史", () => {
     const snip = test.session.getAllTools().find((tool) => tool.name === "snip");
     expect(snip?.exposure).toBe("direct");
     expect(snip?.promptGuidelines?.length).toBe(1);
-    expect(snip?.description).toContain("裁剪");
+    expect(snip?.description).toContain("Drop an earlier stretch");
     // 直接对模型可见，不靠 setActiveTools 动态激活（缓存前缀稳定，设计 §3.3）
     expect(test.session.getActiveToolNames()).toContain("snip");
 
@@ -111,7 +111,7 @@ describe("snip：裁剪一段历史", () => {
     const third = test.requests[2]!;
     expect(third.allText).not.toContain("第一问");
     expect(third.allText).toContain("第二问");
-    expect(third.allText).toContain("已排队裁剪");
+    expect(third.allText).toContain("Queued");
 
     // 分支感知的会话条目：context_edit(null) + 审计 custom
     const branch = branchEntries(test);
@@ -200,7 +200,7 @@ describe("snip：校验", () => {
     await test.run("第一问");
     await test.run("第二问");
     const third = test.requests[2]!;
-    expect(third.allText).toContain("找不到短 id");
+    expect(third.allText).toContain("No such short id");
     const availableId = userShortIds(test.requests[1]!)[0] ?? "";
     expect(third.allText).toContain(availableId);
     // 没有产生任何 context_edit
@@ -233,7 +233,7 @@ describe("snip：校验", () => {
     );
     await test.run("第三问");
     const latest = test.requests.at(-1)!;
-    expect(latest.allText).toContain("区间顺序错误");
+    expect(latest.allText).toContain("Bad range");
     expect(latest.allText).toContain(id1);
     expect(latest.allText).toContain(id2);
     // 被拒之后没有任何 context_edit

@@ -113,7 +113,7 @@ describe("票据 04：基本重建", () => {
     expect(table.get("c:/repo/a.txt")?.contentHash).toBe(hashContent("hello"));
   });
 
-  test("范围读被跳过（与 CC 一致：它不是 resume 后的合格水位）", () => {
+  test("范围读被跳过（它不是 resume 后的合格水位）", () => {
     const { result } = replay(readPair("c1", "a.txt", 5_000, { offset: 1, limit: 10 }));
     expect(result).toEqual([]);
   });

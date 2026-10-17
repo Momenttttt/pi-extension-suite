@@ -7,7 +7,7 @@
 import { createHash } from "node:crypto";
 import { posix, win32 } from "node:path";
 
-/** 读到的程度。范围读与截断读都不是"整个文件"。 */
+/** 读到的程度。范围读与截断读都不是“整个文件”。 */
 export type ReadKind = "full" | "ranged" | "truncated";
 
 /** 水位来源，只用于诊断，不参与判定。 */
@@ -17,7 +17,7 @@ export interface ReadStateEntry {
   /** 规范化后的路径键（见 normalizePathKey）。 */
   key: string;
   absolutePath: string;
-  /** floor(statSync().mtimeMs)，对齐 CC 的 Math.floor(mtimeMs)。 */
+  /** 取整到毫秒的 mtime：mtime 的亚毫秒部分在比较里没有意义，取整避免浮点误差误判。 */
   mtimeMs: number;
   sizeBytes: number;
   /** sha256(文本内容)。范围读 / 截断读 / 图片 / edit 记录没有。 */
@@ -59,13 +59,13 @@ export function pathImpl(platform: string = process.platform) {
  *    **只在 win32 语义下**把 `\` 当分隔符——POSIX 上反斜杠是合法文件名字符）
  * 3. NFC 归一化（macOS 上同一文件名可能是 NFC 也可能是 NFD）
  * 4. 折叠大小写（仅 win32 默认）——NTFS 上 `C:\Foo\a.ts` 与 `c:\foo\A.ts` 是同一个文件，
- *    不折叠会产生"明明读过却要求重读"的假阳性。代价是大小写敏感卷上可能把两个文件当同一个。
+ *    不折叠会产生“明明读过却要求重读”的假阳性。代价是大小写敏感卷上可能把两个文件当同一个。
  */
 export function normalizePathKey(path: string, options: PathKeyOptions): string {
   const platform = options.platform ?? process.platform;
   const impl = pathImpl(platform);
   const isWindows = platform === "win32";
-  // 统一分隔符只是为了"同一个文件同一个键"；POSIX 语义下不能动反斜杠
+  // 统一分隔符只是为了“同一个文件同一个键”；POSIX 语义下不能动反斜杠
   const toForward = (value: string) => (isWindows ? value.split("\\").join("/") : value);
 
   const slashed = toForward(path);
@@ -76,7 +76,7 @@ export function normalizePathKey(path: string, options: PathKeyOptions): string 
   return caseInsensitive ? nfc.toLowerCase() : nfc;
 }
 
-/** 计算文本内容的 sha256，与 pi / CC 的水位比较口径一致（十六进制小写）。 */
+/** 计算文本内容的 sha256（十六进制小写）。 */
 export function hashContent(content: string): string {
   return createHash("sha256").update(content, "utf8").digest("hex");
 }
@@ -92,7 +92,7 @@ export type WriteGateCode = "not_read" | "truncated_read" | "modified_since_read
 export interface WriteGateDecision {
   action: WriteGateAction;
   code?: WriteGateCode;
-  /** 阻断时给模型看的文案（由调用方按事件语言组装，这里只给结构）。 */
+  /** 阻断时给模型看的文案。 */
   reason?: string;
 }
 
@@ -115,17 +115,18 @@ export interface WriteGateMessages {
   modifiedSinceRead: (displayPath: string) => string;
 }
 
+/** 模型看到的阻断文案。英文：这是给模型读的指令，不是给人看的提示。 */
 export const DEFAULT_WRITE_GATE_MESSAGES: WriteGateMessages = {
   notRead: (path) =>
-    `文件 ${path} 尚未在本会话中读取过。请先用 read 读取它，再写入；如果这是有意创建的新文件，请确认路径正确。`,
+    `${path} has not been read in this session. Read it with the read tool before writing. If you meant to create a new file, check that the path is correct.`,
   truncatedRead: (path) =>
-    `你读到的 ${path} 内容是被截断的，不是完整文件，因此不能用来整文件覆盖。请用 read 的 offset/limit 分段读完整，或用 edit 做定点修改。`,
+    `The content you read from ${path} was truncated, so it is not the whole file and cannot be used to overwrite it. Read it in chunks with the read tool's offset/limit, or make a targeted change with edit instead.`,
   modifiedSinceRead: (path) =>
-    `${path} 在你读取之后被改动过（可能是你、用户或其它工具造成的）。请重新读取后再写。`,
+    `${path} changed after you read it (by you, the user, or another tool). Read it again before writing.`,
 };
 
 /**
- * 写入门禁判定表。`edit` 与 `write` 走同一套规则（对齐 Claude Code）：
+ * 写入门禁判定表。`edit` 与 `write` 走同一套规则：
  *
  * | 条件 | 结论 |
  * | --- | --- |

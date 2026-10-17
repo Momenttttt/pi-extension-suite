@@ -128,7 +128,7 @@ describe("票据 04：resume 之后不误报", () => {
     );
     await resumed.run("edit without re-reading");
 
-    // 范围读在重建时被跳过（与 CC 一致）→ 等于"没读过" → 必须重读
+    // 范围读在重建时被跳过 → 等于"没读过" → 必须重读
     expect(resumed.requests[1]?.allText).toContain("read-guard: not_read");
     expect(readFileSync(file, "utf8")).toBe("original content\n");
   });

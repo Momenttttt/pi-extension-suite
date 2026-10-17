@@ -139,8 +139,8 @@ const readGuard: ExtensionFactory = (pi: ExtensionAPI): void => {
     const key = normalizePathKey(event.input.path, { cwd: ctx.cwd });
     const absolutePath = absolutePathOf(event.input.path, ctx.cwd);
 
-    // 豁免：默认空数组，不预设豁免任何路径（记忆目录也在内，与 ZCode 侧的约束对称）。
-    // 判定用规范化后的绝对路径，且大小写/分隔符都已经统一，glob 不必再关心平台差异。
+    // 豁免：默认空数组，不预设豁免任何路径（连记忆目录也在内——那里同样该先读后写）。
+    // 判定用规范化后的路径键，且大小写/分隔符都已经统一，glob 不必再关心平台差异。
     if (isExempt(key, absolutePath, configNow.exempt)) return;
 
     let currentMtimeMs: number | undefined;
@@ -181,7 +181,7 @@ const readGuard: ExtensionFactory = (pi: ExtensionAPI): void => {
 
     return {
       block: true,
-      reason: withCode(decision.reason ?? "写入被 read-guard 阻断", decision.code),
+      reason: withCode(decision.reason ?? "The write was blocked by read-guard.", decision.code),
     };
   });
 
@@ -268,8 +268,9 @@ function notify(
   ctx.ui.notify(message, kind);
 }
 
+/** 把稳定的原因码附在文案最后一行，便于下游按行匹配。 */
 function withCode(reason: string, code: WriteGateCode | undefined): string {
-  return code ? `${reason}\n（read-guard: ${code}）` : reason;
+  return code ? `${reason}\n(read-guard: ${code})` : reason;
 }
 
 function stringField(record: Record<string, unknown>, key: string): string | undefined {

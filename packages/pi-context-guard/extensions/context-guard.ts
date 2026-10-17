@@ -256,24 +256,24 @@ const contextGuard: ExtensionFactory = (pi: ExtensionAPI): void => {
     name: "snip",
     label: "Snip history",
     description:
-      "把一段较早的对话历史从模型上下文中裁剪掉，让后续请求变小。被裁剪的消息仍在会话文件里，可用 /ctx undo-snip 撤销。只在早期内容确定不再需要时使用；不要裁当前正在进行的回合。",
-    promptSnippet: "裁剪不再需要的较早历史（无损、可撤销）",
+      "Drop an earlier stretch of the conversation from your own context to shrink later requests. The messages stay in the session file and /ctx undo-snip brings them back. Use it only when the earlier content is certainly no longer needed, and never on the turn you are working in.",
+    promptSnippet: "Drop earlier history that is no longer needed (lossless, undoable)",
     promptGuidelines: [
-      "对话很长、早期的工具结果不再需要时，用 snip 裁剪更早的历史，而不是要求用户重开会话。",
+      "When the conversation gets long and earlier tool results are no longer needed, snip that earlier history instead of asking the user to start a new session.",
     ],
     parameters: Type.Object({
       from: Type.String({
-        description: "区间起点：某条用户消息末尾 [id:xxxxxx] 里的 6 位短 id",
+        description: "Range start: the 6-character short id shown as [id:xxxxxx] at the end of a user message",
       }),
       to: Type.String({
-        description: "区间终点：同一套短 id；必须晚于 from，且不能是本回合的用户消息",
+        description: "Range end: same kind of short id; must come after from, and cannot be this turn's user message",
       }),
-      reason: Type.Optional(Type.String({ description: "裁剪理由，会记进会话审计条目" })),
+      reason: Type.Optional(Type.String({ description: "Why you are snipping this range; recorded in the session audit entry" })),
     }),
     execute: async (_toolCallId, params, _signal, _onUpdate, ctx) => {
       const configNow = configOf(ctx);
       if (!configNow.enabled) {
-        throw new Error("context-guard 已禁用（enabled: false），snip 不可用。");
+        throw new Error("snip is unavailable: context-guard is disabled (enabled: false).");
       }
       const resolved = resolveSnipTargets(branchItems(ctx), params.from, params.to);
       if (!resolved.ok) throw new Error(resolved.error);
@@ -292,7 +292,7 @@ const contextGuard: ExtensionFactory = (pi: ExtensionAPI): void => {
         content: [
           {
             type: "text" as const,
-            text: `已排队裁剪 ${count} 条历史（${resolved.shortIds[0]}..${resolved.shortIds[resolved.shortIds.length - 1]}），本回合结束后生效，模型下一回合就看不到它们；原始记录仍在会话里，可用 /ctx undo-snip 撤销。`,
+            text: `Queued ${count} history message(s) for snipping (${resolved.shortIds[0]}..${resolved.shortIds[resolved.shortIds.length - 1]}). It takes effect after this turn, so they will be gone from your context next turn. The original entries stay in the session; /ctx undo-snip restores them.`,
           },
         ],
         details: { count, shortIds: resolved.shortIds, reason: params.reason },
@@ -451,7 +451,7 @@ function runUndoSnip(pi: ExtensionAPI, state: ContextGuardState, ctx: ExtensionC
   );
 }
 
-/** `/ctx` 状态：占用、清理统计、CC 对照、子命令、失败计数。 */
+/** `/ctx` 状态：占用、清理统计、阈值对照提示、子命令、失败计数。 */
 function statusReport(state: ContextGuardState, ctx: ExtensionContext): string {
   const usage = ctx.getContextUsage();
   const usageLine = usage
@@ -467,7 +467,7 @@ function statusReport(state: ContextGuardState, ctx: ExtensionContext): string {
     `决策稳定性：清理集合按冻结水位计算，相邻请求一致（水位${state.watermark ? "已冻结" : "未推进"}）`,
     `裁剪：${state.activeSnipCount()} 条已裁剪（可撤销）`,
     `压缩失败：连续 ${state.failures} 次${state.failures >= 3 ? "——建议手动 /compact 或换模型" : ""}`,
-    "CC 对照：pi 默认阈值 = 窗口 − reserveTokens(16384)，比 Claude Code 更早触发；要贴近 CC 可设 compaction.reserveTokens = 33000",
+    "自动压缩阈值：pi 的默认值是 窗口 − reserveTokens(16384)；想让它更晚触发就调大 compaction.reserveTokens（33000 是一个常见的对照值）",
     "子命令：/ctx prune 立刻清理较早的工具结果（不调模型、可逆；区别于 pi 内建的 /compact 汇总）；/ctx undo-snip 撤销最近一次裁剪",
   ];
   return lines.join("\n");
