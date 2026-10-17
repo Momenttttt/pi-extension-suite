@@ -1,0 +1,36 @@
+{
+  "name": "@momenttttt/pi-subagent-lite",
+  "version": "0.1.0",
+  "description": "In-process, isolated lightweight subagents for pi: Explore and general-purpose plus markdown agent profiles",
+  "license": "MIT",
+  "type": "module",
+  "keywords": [
+    "pi-package"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Momenttttt/pi-package.git",
+    "directory": "packages/pi-subagent-lite"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "extensions",
+    "agents",
+    "README.md",
+    "LICENSE"
+  ],
+  "pi": {
+    "extensions": [
+      "./extensions/subagent-lite.ts"
+    ]
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "typebox": "*"
+  },
+  "scripts": {
+    "test": "vitest run --root ../.."
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "name": "@momenttttt/pi-context-guard",
+  "version": "0.1.0",
+  "description": "Client-side context layers for pi: microcompact placeholders and model-driven history snipping",
+  "license": "MIT",
+  "type": "module",
+  "keywords": [
+    "pi-package"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Momenttttt/pi-package.git",
+    "directory": "packages/pi-context-guard"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "extensions",
+    "README.md",
+    "LICENSE"
+  ],
+  "pi": {
+    "extensions": [
+      "./extensions/context-guard.ts"
+    ]
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "typebox": "*"
+  },
+  "scripts": {
+    "test": "vitest run --root ../.."
+  }
+}

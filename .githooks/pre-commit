@@ -1,0 +1,27 @@
+#!/bin/sh
+# 拦住两类机械错误：提交身份不对、文档交叉引用过期。
+#
+# 身份必须是**仓库 local 配置**（CODING_STANDARDS.md 规则 6）：本机全局身份是私人邮箱，
+# 一旦依赖全局配置或顺手 --global 覆盖，公开仓库里就会留下它，而历史里的邮箱很难改干净。
+set -e
+
+expected_name="Momenttttt"
+expected_email="145744669+Momenttttt@users.noreply.github.com"
+
+actual_name=$(git config --local --get user.name || true)
+actual_email=$(git config --local --get user.email || true)
+
+if [ "$actual_name" != "$expected_name" ] || [ "$actual_email" != "$expected_email" ]; then
+  echo "提交被拦：仓库 local 身份不对。"
+  echo "  期望：$expected_name <$expected_email>"
+  echo "  实际：${actual_name:-<未设置>} <${actual_email:-<未设置>}>"
+  echo "修好再提交（不要动全局配置）："
+  echo "  git config --local user.name \"$expected_name\""
+  echo "  git config --local user.email \"$expected_email\""
+  exit 1
+fi
+
+# 文档检查只在有脚本时跑（新克隆里也在，所以通常都会跑）
+if [ -f scripts/check-docs.mjs ] && [ -d .scratch/pi-extension-suite ]; then
+  node scripts/check-docs.mjs
+fi
