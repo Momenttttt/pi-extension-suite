@@ -32,10 +32,13 @@ pi install npm:@momenttttt/pi-zcode-memory
 
 Drop the ones you do not want. There are no cross-package dependencies: nothing imports a sibling, and the optional links below quietly do nothing when the other side is missing.
 
-A package can also be loaded from a checkout instead of the published one, without installing anything:
+To try a package without installing it:
 
 ```bash
 pi -e ./packages/pi-read-guard/extensions/read-guard.ts
+pi -e ./packages/pi-context-guard/extensions/context-guard.ts
+pi -e ./packages/pi-subagent-lite/extensions/subagent-lite.ts
+pi -e ./packages/pi-zcode-memory/extensions/zcode-memory.ts
 ```
 
 And if you would rather verify before installing, the checks run locally and need no network:

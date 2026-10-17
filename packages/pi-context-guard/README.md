@@ -14,7 +14,7 @@ pi's native **compaction** is left as it is. This package does not rewrite it: t
 pi install npm:@momenttttt/pi-context-guard
 ```
 
-Or load a working copy from a checkout, without installing it:
+To try this package without installing it:
 
 ```bash
 pi -e ./packages/pi-context-guard/extensions/context-guard.ts

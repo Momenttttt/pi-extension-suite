@@ -12,7 +12,7 @@ pi's `write` is a full overwrite with no checks in front of it, and `edit` insis
 pi install npm:@momenttttt/pi-read-guard
 ```
 
-Or load a working copy from a checkout, without installing it:
+To try this package without installing it:
 
 ```bash
 pi -e ./packages/pi-read-guard/extensions/read-guard.ts

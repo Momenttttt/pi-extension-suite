@@ -14,7 +14,7 @@ pi 原生的**压缩**（compaction）保持原样，本包不重写它：不动
 pi install npm:@momenttttt/pi-context-guard
 ```
 
-也可以不装，直接加载检出里的工作副本：
+想不安装先试试这个包的效果：
 
 ```bash
 pi -e ./packages/pi-context-guard/extensions/context-guard.ts

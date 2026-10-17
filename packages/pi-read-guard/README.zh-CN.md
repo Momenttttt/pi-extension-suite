@@ -12,7 +12,7 @@ pi 的 `write` 是全量覆盖、没有任何前置检查；`edit` 虽然要精�
 pi install npm:@momenttttt/pi-read-guard
 ```
 
-也可以不装，直接加载检出里的工作副本：
+想不安装先试试这个包的效果：
 
 ```bash
 pi -e ./packages/pi-read-guard/extensions/read-guard.ts

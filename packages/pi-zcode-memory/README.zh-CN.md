@@ -15,7 +15,7 @@
 pi install npm:@momenttttt/pi-zcode-memory
 ```
 
-也可以不装，直接加载检出里的工作副本：
+想不安装先试试这个包的效果：
 
 ```bash
 pi -e ./packages/pi-zcode-memory/extensions/zcode-memory.ts

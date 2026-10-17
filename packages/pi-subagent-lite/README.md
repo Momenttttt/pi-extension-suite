@@ -15,7 +15,7 @@ Lightweight subagents that run in-process and are isolated by default.
 pi install npm:@momenttttt/pi-subagent-lite
 ```
 
-Or load a working copy from a checkout, without installing it:
+To try this package without installing it:
 
 ```bash
 pi -e ./packages/pi-subagent-lite/extensions/subagent-lite.ts

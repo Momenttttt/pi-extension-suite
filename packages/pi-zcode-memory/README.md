@@ -15,7 +15,7 @@ One project memory shared between pi and ZCode.
 pi install npm:@momenttttt/pi-zcode-memory
 ```
 
-Or load a working copy from a checkout, without installing it:
+To try this package without installing it:
 
 ```bash
 pi -e ./packages/pi-zcode-memory/extensions/zcode-memory.ts

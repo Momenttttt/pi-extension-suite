@@ -32,10 +32,13 @@ pi install npm:@momenttttt/pi-zcode-memory
 
 不想要的就不装。四包之间没有依赖，没有哪个包 import 兄弟包；下面这些联动在对方缺席时静默降级。
 
-某个包也可以不装，直接加载检出里的工作副本：
+想不安装的情况下先试试某个包的效果：
 
 ```bash
 pi -e ./packages/pi-read-guard/extensions/read-guard.ts
+pi -e ./packages/pi-context-guard/extensions/context-guard.ts
+pi -e ./packages/pi-subagent-lite/extensions/subagent-lite.ts
+pi -e ./packages/pi-zcode-memory/extensions/zcode-memory.ts
 ```
 
 想先验证再装的话，检查项在本地就能跑，不需要网络：
