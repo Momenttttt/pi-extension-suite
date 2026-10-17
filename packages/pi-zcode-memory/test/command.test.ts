@@ -19,7 +19,7 @@ type Notify = { message: string; type?: "info" | "warning" | "error" };
 const cleanups: Array<() => void> = [];
 
 beforeEach(() => {
-  process.env.PI_AGENT_DIR = mkdtempSync(join(tmpdir(), "pi-memory-agent-"));
+  process.env.PI_CODING_AGENT_DIR = mkdtempSync(join(tmpdir(), "pi-memory-agent-"));
 });
 
 afterEach(() => {

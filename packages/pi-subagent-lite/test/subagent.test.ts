@@ -30,7 +30,7 @@ const FIXTURE_PATH = join(
 
 const workspaces: Array<() => void> = [];
 const sessions: TestSession[] = [];
-const originalAgentDir = process.env.PI_AGENT_DIR;
+const originalAgentDir = process.env.PI_CODING_AGENT_DIR;
 
 function workspace(): string {
   const cwd = mkdtempSync(join(tmpdir(), "subagent-e2e-"));
@@ -43,11 +43,11 @@ function workspace(): string {
 afterEach(() => {
   for (const session of sessions.splice(0)) session.dispose();
   for (const cleanup of workspaces.splice(0)) cleanup();
-  if (originalAgentDir === undefined) delete process.env.PI_AGENT_DIR;
-  else process.env.PI_AGENT_DIR = originalAgentDir;
+  if (originalAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
+  else process.env.PI_CODING_AGENT_DIR = originalAgentDir;
 });
 
-/** 建工作区 + 会话；`agentDir` 与扩展解析的 `PI_AGENT_DIR` 对齐，测试才是自洽的。 */
+/** 建工作区 + 会话；`agentDir` 与扩展解析的 `PI_CODING_AGENT_DIR` 对齐，测试才是自洽的。 */
 async function sessionIn(
   responses: TestSessionOptions["responses"],
   options: { config?: Record<string, unknown>; extraExtensions?: ExtensionFactory[] } = {},
@@ -55,7 +55,7 @@ async function sessionIn(
   const cwd = workspace();
   const agentDir = join(cwd, ".pi-agent");
   mkdirSync(agentDir, { recursive: true });
-  process.env.PI_AGENT_DIR = agentDir;
+  process.env.PI_CODING_AGENT_DIR = agentDir;
   if (options.config !== undefined) {
     mkdirSync(join(cwd, ".pi"), { recursive: true });
     writeFileSync(join(cwd, ".pi", "subagent-lite.json"), JSON.stringify(options.config), "utf8");

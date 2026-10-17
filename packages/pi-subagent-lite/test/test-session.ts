@@ -88,6 +88,11 @@ export interface TestSessionOptions {
   /** agent 目录；默认落在 `<cwd>/.pi-agent`。 */
   agentDir?: string;
   /**
+   * 收扩展发出来的 UI 通知。扩展用 `ctx.ui.notify` 报告覆盖告警、冲突告警、守卫降级——
+   * 这些在真实运行里是给人看的，测试要断言它们就必须把它接住。
+   */
+  onNotify?: (notification: { message: string; kind?: string }) => void;
+  /**
    * 会话落盘目录。给了就用 `SessionManager.create(cwd, sessionDir)`，会话会写成真的
    * 会话文件——测 resume / 压缩 / 换分支这类生命周期行为必须这样（`inMemory` 没有文件）。
    */
@@ -358,7 +363,16 @@ export async function createTestSession(options: TestSessionOptions): Promise<Te
   // 的宿主调用它。少了这一句，所有依赖 `session_start` 的扩展行为（读态重建、索引注入、
   // 工具冲突扫描）在测试里都不会发生，而 `tool_call` / `tool_result` 照常工作——
   // 表现为"测试通过但扩展没初始化"，非常难查。
-  await session.bindExtensions({});
+  await session.bindExtensions(
+    options.onNotify === undefined
+      ? {}
+      : {
+          uiContext: {
+            notify: (message: string, kind?: "info" | "warning" | "error") =>
+              options.onNotify?.({ message, kind }),
+          } as never,
+        },
+  );
 
   return {
     session,

@@ -23,12 +23,12 @@ const EXTENSION_PATH = join(
 );
 
 const workspaces: Array<() => void> = [];
-const originalAgentDir = process.env.PI_AGENT_DIR;
+const originalAgentDir = process.env.PI_CODING_AGENT_DIR;
 
 afterEach(() => {
   for (const cleanup of workspaces.splice(0)) cleanup();
-  if (originalAgentDir === undefined) delete process.env.PI_AGENT_DIR;
-  else process.env.PI_AGENT_DIR = originalAgentDir;
+  if (originalAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
+  else process.env.PI_CODING_AGENT_DIR = originalAgentDir;
 });
 
 function workspace(): string {
@@ -60,7 +60,7 @@ function fakeContext(cwd: string, notifications: string[]) {
 describe("pi 的真实加载路径（jiti）", () => {
   test("扩展文件装得进来，工具与命令都注册上了", async () => {
     const cwd = workspace();
-    process.env.PI_AGENT_DIR = join(cwd, ".pi-agent");
+    process.env.PI_CODING_AGENT_DIR = join(cwd, ".pi-agent");
     const { extension, errors } = await loadOurExtension(cwd);
 
     expect(errors).toEqual([]);
@@ -71,7 +71,7 @@ describe("pi 的真实加载路径（jiti）", () => {
 
   test("jiti 下守卫仍能自动解析到 pi-read-guard（走 createRequire 退路）", async () => {
     const cwd = workspace();
-    process.env.PI_AGENT_DIR = join(cwd, ".pi-agent");
+    process.env.PI_CODING_AGENT_DIR = join(cwd, ".pi-agent");
     const { extension } = await loadOurExtension(cwd);
 
     const notifications: string[] = [];
@@ -87,7 +87,7 @@ describe("pi 的真实加载路径（jiti）", () => {
 
   test("session_start 跑得起来（档案扫描 + 冲突扫描不炸）", async () => {
     const cwd = workspace();
-    process.env.PI_AGENT_DIR = join(cwd, ".pi-agent");
+    process.env.PI_CODING_AGENT_DIR = join(cwd, ".pi-agent");
     const { extension } = await loadOurExtension(cwd);
 
     const notifications: string[] = [];

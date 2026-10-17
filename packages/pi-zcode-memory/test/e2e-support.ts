@@ -1,7 +1,7 @@
 /**
  * S2 共用装载：临时工作目录 + 临时记忆目录 + 项目配置指向该目录。
  *
- * 记忆目录用配置里的 `dir` 显式指定，测试绝不碰真实 `~/.zcode`；`PI_AGENT_DIR` 也指向
+ * 记忆目录用配置里的 `dir` 显式指定，测试绝不碰真实 `~/.zcode`；`PI_CODING_AGENT_DIR` 也指向
  * 临时目录，避免读到开发机上的全局配置。
  */
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -29,8 +29,8 @@ export function createMemoryWorkspace(prefix = "pi-memory-e2e-"): MemoryWorkspac
     rmSync(memDir, { recursive: true, force: true });
     rmSync(agentDir, { recursive: true, force: true });
   });
-  previousAgentDir = process.env.PI_AGENT_DIR;
-  process.env.PI_AGENT_DIR = agentDir;
+  previousAgentDir = process.env.PI_CODING_AGENT_DIR;
+  process.env.PI_CODING_AGENT_DIR = agentDir;
   mkdirSync(join(cwd, ".pi"), { recursive: true });
   writeFileSync(join(cwd, ".pi", "zcode-memory.json"), `${JSON.stringify({ dir: memDir }, null, 2)}\n`, "utf8");
   return { cwd, memDir, agentDir };
@@ -38,8 +38,8 @@ export function createMemoryWorkspace(prefix = "pi-memory-e2e-"): MemoryWorkspac
 
 export function cleanupMemoryWorkspaces(): void {
   for (const cleanup of cleanups.splice(0)) cleanup();
-  if (previousAgentDir === undefined) delete process.env.PI_AGENT_DIR;
-  else process.env.PI_AGENT_DIR = previousAgentDir;
+  if (previousAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
+  else process.env.PI_CODING_AGENT_DIR = previousAgentDir;
 }
 
 export async function sessionWithMemory(

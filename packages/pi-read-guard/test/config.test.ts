@@ -66,13 +66,13 @@ describe("deepMerge", () => {
 });
 
 describe("resolveAgentDir", () => {
-  test("PI_AGENT_DIR 优先", () => {
-    expect(resolveAgentDir({ PI_AGENT_DIR: "D:\\agent" })).toBe("D:\\agent");
+  test("PI_CODING_AGENT_DIR 优先", () => {
+    expect(resolveAgentDir({ PI_CODING_AGENT_DIR: "D:\\agent" })).toBe("D:\\agent");
   });
 
   test("没设或为空串时退回 ~/.pi/agent", () => {
     expect(resolveAgentDir({})).toMatch(/[\\/]\.pi[\\/]agent$/);
-    expect(resolveAgentDir({ PI_AGENT_DIR: "   " })).toMatch(/[\\/]\.pi[\\/]agent$/);
+    expect(resolveAgentDir({ PI_CODING_AGENT_DIR: "   " })).toMatch(/[\\/]\.pi[\\/]agent$/);
   });
 });
 

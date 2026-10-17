@@ -70,9 +70,17 @@ export function parseReadGuardConfig(raw: unknown): ReadGuardConfig {
   return config;
 }
 
-/** 定位全局配置目录：`PI_AGENT_DIR` 优先，否则 `~/.pi/agent`。 */
+/**
+ * 定位全局配置目录。
+ *
+ * 优先读 pi 自己的环境变量 `PI_CODING_AGENT_DIR`（`pi --help` 列的就是它，pi 内部的
+ * `getAgentDir()` 也认这个），再退回 `~/.pi/agent`。
+ *
+ * 注意别写成 `PI_AGENT_DIR`：那不是 pi 认的名字，设了它 pi 自己的扩展/设置仍然走
+ * `~/.pi/agent`，于是"我们的全局配置"与"pi 的全局资源"会分叉到两个目录。
+ */
 export function resolveAgentDir(env: NodeJS.ProcessEnv = process.env): string {
-  const fromEnv = env.PI_AGENT_DIR;
+  const fromEnv = env.PI_CODING_AGENT_DIR;
   if (typeof fromEnv === "string" && fromEnv.trim().length > 0) return fromEnv;
   return join(homedir(), ".pi", "agent");
 }
