@@ -528,3 +528,73 @@ describe("子会话装配", () => {
     expect(withContext.session.systemPrompt).toContain("只用中文注释");
   });
 });
+
+describe("maxTurns", () => {
+  test("档案设了 maxTurns 才启用：到点 abort，status=max_turns", async () => {
+    const { test, cwd } = await sessionIn(
+      [
+        {
+          text: "delegating",
+          toolCall: {
+            name: "subagent",
+            arguments: { description: "long task", prompt: "keep working", subagent_type: "limited" },
+          },
+        },
+        { text: "turn one", toolCall: { name: "read", arguments: { path: "a.txt" } } },
+        { text: "turn two", toolCall: { name: "read", arguments: { path: "a.txt" } } },
+        // 上限是 2 条 assistant 消息，第三步不该被跑到；脚本里留着也只会被父会话消费
+        { text: "PARENT DONE" },
+        { text: "unused" },
+      ],
+      { config: { guardExtensionPaths: [FIXTURE_PATH] } },
+    );
+    mkdirSync(join(cwd, ".pi", "agents"), { recursive: true });
+    writeFileSync(
+      join(cwd, ".pi", "agents", "limited.md"),
+      "---\nname: limited\ndescription: 有轮次上限的代理\ntools: read, bash\nmaxTurns: 2\n---\nbody\n",
+      "utf8",
+    );
+    // 档案是 session_start 时扫的（真实运行里改档案等价于 /reload）
+    await test.session.reload();
+    writeFileSync(join(cwd, "a.txt"), "marker\n", "utf8");
+
+    const reply = await test.run("delegate a long task");
+
+    expect(reply).toBe("PARENT DONE");
+    const [result] = toolResults(test);
+    expect(result?.details["agent"]).toBe("limited");
+    expect(result?.details["status"]).toBe("max_turns");
+    // 近似值：到点那一刻已计到上限，中断时 pi 可能再补一条空的 assistant 消息
+    expect(result?.details["turns"]).toBeGreaterThanOrEqual(2);
+    expect(result?.details["turns"]).toBeLessThanOrEqual(3);
+    // 跑到一半被中断，最后一次工具调用可能被丢弃
+    expect(result?.details["toolCalls"]).toBeGreaterThanOrEqual(1);
+    // 到点即停，但已经产出的最后文本要带回来（设计 §5 的 maxTurns 行为）
+    expect(result?.text).toContain("turn two");
+    expect(result?.text).toMatch(/status=max_turns/);
+  });
+
+  test("没设 maxTurns 的代理不会被上限截断（Explore 连跑两轮）", async () => {
+    const { test } = await sessionIn([
+      {
+        text: "delegating",
+        toolCall: {
+          name: "subagent",
+          arguments: { description: "two turns", prompt: CHILD_PROMPT, subagent_type: "Explore" },
+        },
+      },
+      { toolCall: { name: "read", arguments: { path: "a.txt" } } },
+      { toolCall: { name: "read", arguments: { path: "a.txt" } } },
+      { text: "child finished after two turns" },
+      { text: "PARENT DONE" },
+    ]);
+    writeFileSync(join(test.session.sessionManager.getCwd(), "a.txt"), "marker\n", "utf8");
+
+    await test.run(PARENT_PROMPT);
+
+    const [result] = toolResults(test);
+    expect(result?.details["status"]).toBe("completed");
+    expect(result?.details["turns"]).toBe(3);
+    expect(result?.text).toContain("child finished after two turns");
+  });
+});

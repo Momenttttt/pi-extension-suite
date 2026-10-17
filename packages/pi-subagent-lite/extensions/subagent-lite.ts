@@ -222,6 +222,15 @@ const subagentLite: ExtensionFactory = (pi) => {
       notes.push("[subagent] 会话没有 thinking 档位信息，thinking 走 pi 的默认值。");
     }
 
+    const modelRuntime = parentModelRuntime(ctx);
+    if (modelRuntime === undefined) {
+      // 不静默降级：父会话里由扩展注册的 provider 在自建 runtime 的子会话里不存在
+      notes.push(
+        "[subagent] 拿不到父会话的 model runtime，子会话将自建一个：" +
+          "由扩展注册的 provider 在子代理里可能不可用（models.json 里的 provider 不受影响）。",
+      );
+    }
+
     const started = Date.now();
     let child: AgentSession | undefined;
     let turns = 0;
@@ -236,7 +245,7 @@ const subagentLite: ExtensionFactory = (pi) => {
         profile,
         model: modelChoice.model,
         thinkingLevel: thinking.level as SessionThinkingLevel | undefined,
-        modelRuntime: parentModelRuntime(ctx),
+        modelRuntime,
         extensionPaths: current.config.guardExtensionPaths,
       });
       child = created.session;
