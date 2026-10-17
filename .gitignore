@@ -1,0 +1,16 @@
+# 依赖
+node_modules/
+
+# 本机开发与计划文档：一律不进仓库（个人维护，见 ADR-0007 与 CODING_STANDARDS.md）
+/docs/
+/GLOSSARY.md
+/AGENTS.md
+/CODING_STANDARDS.md
+/.scratch/
+
+# 产物与系统垃圾
+coverage/
+*.tsbuildinfo
+.DS_Store
+Thumbs.db
+*.log
