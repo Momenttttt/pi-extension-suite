@@ -5,7 +5,7 @@
  * 之后确实把它登记成读水位。发布方用一个最小桩扩展模拟——真实的记忆插件是独立包，
  * 在测试里 import 它会引入跨包依赖，而契约本身只有"事件名 + 载荷形状"。
  */
-import { readFileSync, statSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { afterEach, describe, expect, test } from "vitest";
@@ -177,5 +177,80 @@ describe("票据 08：收到读态登记之后写入门禁放行", () => {
     // 坏载荷不被登记，门禁照常拦；而且没有把整个会话搞崩
     await test.run("overwrite");
     expect(test.requests[1]?.allText).toContain("read-guard: not_read");
+  });
+});
+
+describe("票据 02：exempt 与 mode 配置在真实事件流里生效", () => {
+  test("未读但命中 exempt glob → 放行", async () => {
+    const cwd = createTempWorkspace();
+    cleanups.push(cwd.cleanup);
+    mkdirSync(join(cwd.cwd, "generated"), { recursive: true });
+    const file = join(cwd.cwd, "generated", "a.ts");
+    writeFileSync(file, "generated\n", "utf8");
+    mkdirSync(join(cwd.cwd, ".pi"), { recursive: true });
+    writeFileSync(
+      join(cwd.cwd, ".pi", "read-guard.json"),
+      JSON.stringify({ exempt: ["**/generated/**"] }),
+      "utf8",
+    );
+
+    const test = await createTestSession({
+      extension: readGuard,
+      cwd: cwd.cwd,
+      responses: [
+        { toolCall: { name: "write", arguments: { path: "generated/a.ts", content: "rewritten\n" } } },
+        { text: "done" },
+      ],
+    });
+    sessions.push(test);
+
+    await test.run("overwrite a generated file");
+    expect(test.requests[1]?.allText).not.toContain("read-guard:");
+    expect(readFileSync(file, "utf8")).toBe("rewritten\n");
+  });
+
+  test("mode: warn 时不阻断，但放行且不改判定的语义", async () => {
+    const cwd = createTempWorkspace();
+    cleanups.push(cwd.cleanup);
+    const file = join(cwd.cwd, "a.txt");
+    writeFileSync(file, "original\n", "utf8");
+    mkdirSync(join(cwd.cwd, ".pi"), { recursive: true });
+    writeFileSync(join(cwd.cwd, ".pi", "read-guard.json"), JSON.stringify({ mode: "warn" }), "utf8");
+
+    const test = await createTestSession({
+      extension: readGuard,
+      cwd: cwd.cwd,
+      responses: [
+        { toolCall: { name: "write", arguments: { path: "a.txt", content: "written anyway\n" } } },
+        { text: "done" },
+      ],
+    });
+    sessions.push(test);
+
+    await test.run("overwrite under warn mode");
+    expect(test.requests[1]?.allText).not.toContain("read-guard: not_read");
+    expect(readFileSync(file, "utf8")).toBe("written anyway\n");
+  });
+
+  test("enabled: false 时完全不干预", async () => {
+    const cwd = createTempWorkspace();
+    cleanups.push(cwd.cleanup);
+    const file = join(cwd.cwd, "a.txt");
+    writeFileSync(file, "original\n", "utf8");
+    mkdirSync(join(cwd.cwd, ".pi"), { recursive: true });
+    writeFileSync(join(cwd.cwd, ".pi", "read-guard.json"), JSON.stringify({ enabled: false }), "utf8");
+
+    const test = await createTestSession({
+      extension: readGuard,
+      cwd: cwd.cwd,
+      responses: [
+        { toolCall: { name: "write", arguments: { path: "a.txt", content: "written\n" } } },
+        { text: "done" },
+      ],
+    });
+    sessions.push(test);
+
+    await test.run("overwrite with the guard disabled");
+    expect(readFileSync(file, "utf8")).toBe("written\n");
   });
 });

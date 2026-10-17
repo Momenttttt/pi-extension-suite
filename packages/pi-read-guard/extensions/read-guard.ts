@@ -16,6 +16,7 @@
  */
 import { statSync } from "node:fs";
 import { readFile } from "node:fs/promises";
+import { matchesGlob } from "node:path";
 
 import type {
   ExtensionAPI,
@@ -138,6 +139,10 @@ const readGuard: ExtensionFactory = (pi: ExtensionAPI): void => {
     const key = normalizePathKey(event.input.path, { cwd: ctx.cwd });
     const absolutePath = absolutePathOf(event.input.path, ctx.cwd);
 
+    // 豁免：默认空数组，不预设豁免任何路径（记忆目录也在内，与 ZCode 侧的约束对称）。
+    // 判定用规范化后的绝对路径，且大小写/分隔符都已经统一，glob 不必再关心平台差异。
+    if (isExempt(key, absolutePath, configNow.exempt)) return;
+
     let currentMtimeMs: number | undefined;
     try {
       currentMtimeMs = Math.floor(statSync(absolutePath).mtimeMs);
@@ -255,6 +260,27 @@ function withCode(reason: string, code: WriteGateCode | undefined): string {
 function stringField(record: Record<string, unknown>, key: string): string | undefined {
   const value = record[key];
   return typeof value === "string" ? value : undefined;
+}
+
+/**
+ * 路径是否命中豁免 glob。
+ *
+ * 两个候选都试：规范化键（大小写与分隔符已统一，跨平台一致）与真实绝对路径
+ * （用户写 `**​/generated/**` 这种与平台无关的写法时更直观）。glob 写法不合法时
+ * 视为不匹配——配置错了不该让插件崩，也不该意外放行。
+ */
+function isExempt(key: string, absolutePath: string, exempt: readonly string[]): boolean {
+  for (const pattern of exempt) {
+    const normalized = pattern.split("\\").join("/");
+    for (const candidate of [key, absolutePath.split("\\").join("/"), absolutePath]) {
+      try {
+        if (matchesGlob(candidate, normalized)) return true;
+      } catch {
+        // 非法 glob：跳过
+      }
+    }
+  }
+  return false;
 }
 
 function absolutePathOf(path: string, cwd: string): string {
