@@ -18,6 +18,8 @@ export interface SubagentDetails {
   durationMs: number;
   usage: SubagentUsage;
   truncated: boolean;
+  /** 调用方给的这次委派的一句话说明（模型侧必填参数，落在这里供 UI/统计用）。 */
+  description?: string;
   /** 实际使用的模型（`provider/id`），便于和档案声明对账（设计 §6.1）。 */
   model?: string;
   /** SDK 报告"没能按请求的模型起会话"时的提示（设计 §6.7：回退必须明说）。 */

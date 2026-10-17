@@ -168,6 +168,7 @@ describe("委派只读任务给 Explore", () => {
     expect(result?.isError).toBe(false);
     expect(result?.details["agent"]).toBe("Explore");
     expect(result?.details["status"]).toBe("completed");
+    expect(result?.details["description"]).toBe("locate the marker");
     expect(result?.details["turns"]).toBe(2);
     expect(result?.details["toolCalls"]).toBe(1);
     expect(result?.details["truncated"]).toBe(false);

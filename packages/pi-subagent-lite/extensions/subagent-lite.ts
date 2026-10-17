@@ -269,6 +269,8 @@ const subagentLite: ExtensionFactory = (pi) => {
 
       // 计数：实测 `message_end` 每条消息都发一次，`role === "assistant"` 即一条模型消息，
       // 与 `turn_end` 的次数一致（`turn_end` 只在工具批次结束后发，语义更粗）。
+      // 同时自己攒"最后一段文本"：`session.getLastAssistantText()` 只看最后一条助手消息，
+      // 中途中断时 pi 会补一条空的助手消息，那个 API 就什么都拿不到了。
       const unsubscribe = child.subscribe((event) => {
         if (event.type !== "message_end") return;
         const message = event.message as { role?: string; content?: unknown };
@@ -310,6 +312,7 @@ const subagentLite: ExtensionFactory = (pi) => {
         // 只表示正文被 100k 上限截断；maxTurns 到点停由 status 表达（设计文档把两者混用
         // 同一个字段，这里拆开——合成一个布尔就把"结果被截断"和"没跑完"两件事糊住了）
         truncated: false,
+        description: params.description.trim(),
         model: `${child.model?.provider ?? modelChoice.model?.provider ?? "?"}/${child.model?.id ?? modelChoice.model?.id ?? "?"}`,
       };
       if (created.modelFallbackMessage !== undefined) details.modelFallback = created.modelFallbackMessage;
