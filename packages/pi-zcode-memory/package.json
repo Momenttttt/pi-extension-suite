@@ -13,7 +13,8 @@
     "directory": "packages/pi-zcode-memory"
   },
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
   },
   "files": [
     "extensions",
