@@ -5,7 +5,7 @@
  * 单元测试逐条钉住。扩展层的职责只是把真实事件折算成这里的输入。
  */
 import { createHash } from "node:crypto";
-import { isAbsolute, normalize, resolve, sep } from "node:path";
+import { posix, win32 } from "node:path";
 
 /** 读到的程度。范围读与截断读都不是"整个文件"。 */
 export type ReadKind = "full" | "ranged" | "truncated";
@@ -29,8 +29,16 @@ export interface ReadStateEntry {
 
 export interface PathKeyOptions {
   cwd: string;
-  /** 是否折叠大小写。默认按当前平台决定（win32 折叠）。 */
+  /** 是否折叠大小写。默认按平台决定（win32 折叠）。 */
   caseInsensitive?: boolean;
+  /**
+   * 用哪套路径语义。默认当前平台。
+   *
+   * 之所以是个参数而不是直接读 `process.platform`：这个模块是纯决策层，路径语义（分隔符、
+   * 盘符、大小写）本身就是规则的一部分，必须能在**任何机器上**被单测覆盖两种语义。
+   * 直接绑运行时的话，CI 跑在 Linux 上就永远测不到 win32 分支，而 win32 才是用户实际在用的。
+   */
+  platform?: NodeJS.Platform;
 }
 
 /** 平台默认是否折叠大小写。 */
@@ -38,21 +46,33 @@ export function defaultCaseInsensitive(platform: string = process.platform): boo
   return platform === "win32";
 }
 
+/** 按平台挑路径实现：win32 一套，其余走 POSIX。 */
+export function pathImpl(platform: string = process.platform) {
+  return platform === "win32" ? win32 : posix;
+}
+
 /**
  * 把工具输入里的路径变成读态表的键。
  *
  * 1. 相对路径按会话 cwd 解析为绝对路径
- * 2. 归一化 `.`/`..`，并把分隔符统一成 `/`（同一个文件在 `\\` 与 `/` 下必须是同一个键）
+ * 2. 归一化 `.`/`..`，并把分隔符统一成 `/`（同一个文件在 `\\` 与 `/` 下必须是同一个键；
+ *    **只在 win32 语义下**把 `\` 当分隔符——POSIX 上反斜杠是合法文件名字符）
  * 3. NFC 归一化（macOS 上同一文件名可能是 NFC 也可能是 NFD）
  * 4. 折叠大小写（仅 win32 默认）——NTFS 上 `C:\Foo\a.ts` 与 `c:\foo\A.ts` 是同一个文件，
  *    不折叠会产生"明明读过却要求重读"的假阳性。代价是大小写敏感卷上可能把两个文件当同一个。
  */
 export function normalizePathKey(path: string, options: PathKeyOptions): string {
-  const slashed = path.split("\\").join("/");
-  const absolute = isAbsolute(slashed) ? normalize(slashed) : resolve(options.cwd.split("\\").join("/"), slashed);
-  const normalizedSeparators = absolute.split("\\").join("/");
-  const caseInsensitive = options.caseInsensitive ?? defaultCaseInsensitive();
-  const nfc = normalizedSeparators.normalize("NFC");
+  const platform = options.platform ?? process.platform;
+  const impl = pathImpl(platform);
+  const isWindows = platform === "win32";
+  // 统一分隔符只是为了"同一个文件同一个键"；POSIX 语义下不能动反斜杠
+  const toForward = (value: string) => (isWindows ? value.split("\\").join("/") : value);
+
+  const slashed = toForward(path);
+  const cwd = toForward(options.cwd);
+  const absolute = impl.isAbsolute(slashed) ? impl.normalize(slashed) : impl.resolve(cwd, slashed);
+  const caseInsensitive = options.caseInsensitive ?? defaultCaseInsensitive(platform);
+  const nfc = toForward(absolute).normalize("NFC");
   return caseInsensitive ? nfc.toLowerCase() : nfc;
 }
 
@@ -160,7 +180,12 @@ export function decideWriteGate(
 }
 
 /** 会话 cwd 与路径之间只差一个分隔符时，展示用的相对路径更短。 */
-export function displayPathOf(absolutePath: string, cwd: string): string {
+export function displayPathOf(
+  absolutePath: string,
+  cwd: string,
+  platform: NodeJS.Platform = process.platform,
+): string {
+  const { sep } = pathImpl(platform);
   const prefix = cwd.endsWith(sep) ? cwd : cwd + sep;
   return absolutePath.startsWith(prefix) ? absolutePath.slice(prefix.length) : absolutePath;
 }

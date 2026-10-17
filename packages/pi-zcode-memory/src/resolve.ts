@@ -53,7 +53,7 @@ export interface ResolveMemoryDirOptions {
 
 export function resolveMemoryDir(options: ResolveMemoryDirOptions): MemoryDirResolution {
   const storageRoot =
-    options.storageRoot ?? resolveZcodeStorageRoot(options.homeDir ?? homedir());
+    options.storageRoot ?? resolveZcodeStorageRoot(options.homeDir ?? homedir(), options.platform);
   const dirInput: MemoryDirInput = {
     cwd: options.cwd,
     storageRoot,
@@ -61,7 +61,7 @@ export function resolveMemoryDir(options: ResolveMemoryDirOptions): MemoryDirRes
     ...(options.platform === undefined ? {} : { platform: options.platform }),
   };
   const parts = computeProjectDirParts(dirInput);
-  const projectsRoot = projectsRootOf(storageRoot);
+  const projectsRoot = projectsRootOf(storageRoot, options.platform);
   const computedDir = computeMemoryDir(dirInput);
   const exists = options.pathExists ?? isDirectory;
   const listNames = options.listDirNames ?? listDirectoryNames;

@@ -48,6 +48,8 @@ interface EntryMessage {
 
 export interface ReplayOptions {
   cwd: string;
+  /** 路径语义（`normalizePathKey` 用）。默认当前平台；测试用它覆盖 win32 与 POSIX 两种。 */
+  platform?: NodeJS.Platform;
   /**
    * 压缩后只重建这个条目之后的保留尾部。省略时处理整条分支。
    * `null` 表示自保留压缩（不保留任何前置条目），此时结果为空表。
@@ -101,7 +103,7 @@ export function replayReadState(
   const byKey = new Map<string, ReadStateEntry>();
 
   for (const entry of entries) {
-    const record = readStateFromEntry(entry, toolCalls, options.cwd);
+    const record = readStateFromEntry(entry, toolCalls, options.cwd, options.platform);
     if (!record) continue;
     // 后来的条目覆盖先前的：同一路径可能读多次、写多次
     byKey.set(record.key, record);
@@ -129,6 +131,7 @@ function readStateFromEntry(
   entry: SessionEntryLike,
   toolCalls: ReadonlyMap<string, ToolCallInput>,
   cwd: string,
+  platform: NodeJS.Platform | undefined,
 ): ReadStateEntry | undefined {
   if (entry.type !== "message") return undefined;
   const message = messageOf(entry);
@@ -149,7 +152,7 @@ function readStateFromEntry(
   const readAtMs = messageTimestamp(message, entry);
   if (readAtMs === undefined) return undefined;
 
-  const key = normalizePathKey(path, { cwd });
+  const key = normalizePathKey(path, { cwd, ...(platform === undefined ? {} : { platform }) });
 
   if (toolName === "write") {
     const content = typeof call.arguments.content === "string" ? call.arguments.content : undefined;

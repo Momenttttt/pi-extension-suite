@@ -1,20 +1,23 @@
 /**
  * ZCode 记忆目录的路径算法（纯函数，不 import pi）。
  *
- * 逐条复刻 ZCode：
- *   - `apps/zcode-cli/packages/bootstrap/src/app/paths.ts` 的 `getCliStorageRoot`
- *   - `apps/zcode-cli/packages/core/src/memory/project-root.ts` 的 `resolveProjectMemoryRoot`
+ * 逐条复刻 ZCode 的 `getCliStorageRoot` 与 `resolveProjectMemoryRoot`：
+ *   - 存储根：`<home>/.zcode`，basename 已是 `cli` 就不再追加
+ *   - 项目目录：`memories/projects/<slug>-<hash16>/memory`
+ *   - hash 输入：工作区标识（远程/托管工作区才有），否则 `resolve(cwd)`；**仅 win32** 折叠大小写
+ *   - slug：小写、非 `[a-z0-9._-]` 换 `-`、去首尾 `-`、截 48、空则 `project`
  *
- * 与 ZCode 的差异只有一处：`platform` 是参数而不是读 `process.platform`，这样 S1 单测能在
- * 非 win32 的机器上验证大小写折叠分支。
+ * **`platform` 是参数而不是读 `process.platform`**：路径语义（分隔符、盘符、大小写）本身就是
+ * 这条算法的一部分，必须在**任何机器上**都能被单测覆盖两种语义——CI 跑在 Linux 上，
+ * 如果绑运行时平台，win32 分支（也就是用户实际在用的那套）永远测不到。
  */
 import { createHash } from "node:crypto";
-import { basename, join, resolve } from "node:path";
+import { posix, win32 } from "node:path";
 
 /** 记忆目录里索引文件的名字。 */
 export const MEMORY_INDEX_FILENAME = "MEMORY.md";
 
-/** 事实文件 frontmatter 允许的 `type`。对齐 ZCode `MEMORY_RECALL_TYPES`。 */
+/** 事实文件 frontmatter 允许的 `type`。 */
 export const MEMORY_TYPES = ["user", "feedback", "project", "reference"] as const;
 export type MemoryType = (typeof MEMORY_TYPES)[number];
 
@@ -24,11 +27,11 @@ export interface MemoryDirInput {
   /** CLI 存储根：`<home>/.zcode/cli`。 */
   storageRoot: string;
   /**
-   * ZCode 的外部工作区标识（远程/托管工作区才有）。
+   * 外部工作区标识（远程/托管工作区才有）。
    * 独立 CLI 与桌面普通项目都是 undefined，此时 slug 取 basename、hash 取路径。
    */
   workspaceIdentity?: string;
-  /** 默认 `process.platform`；只有 win32 才折叠 keySource 的大小写。 */
+  /** 用哪套路径语义。默认当前平台；只有 win32 才折叠 keySource 的大小写。 */
   platform?: NodeJS.Platform;
 }
 
@@ -41,17 +44,24 @@ export interface ProjectDirParts {
   dirName: string;
 }
 
+/** 按平台挑 path 实现：win32 一套，其余走 POSIX。 */
+export function pathImpl(platform: NodeJS.Platform | undefined) {
+  return (platform ?? process.platform) === "win32" ? win32 : posix;
+}
+
 /** `getCliStorageRoot`：basename 已是 `cli` 就不追加。 */
-export function ensureCliStorageRoot(storageRoot: string): string {
-  return basename(storageRoot) === "cli" ? storageRoot : join(storageRoot, "cli");
+export function ensureCliStorageRoot(storageRoot: string, platform?: NodeJS.Platform): string {
+  const impl = pathImpl(platform);
+  return impl.basename(storageRoot) === "cli" ? storageRoot : impl.join(storageRoot, "cli");
 }
 
-/** `expand("~/.zcode")` 之后再走 `getCliStorageRoot`。 */
-export function resolveZcodeStorageRoot(homeDir: string): string {
-  return ensureCliStorageRoot(join(homeDir, ".zcode"));
+/** `<home>/.zcode` 之后再走 `getCliStorageRoot`。 */
+export function resolveZcodeStorageRoot(homeDir: string, platform?: NodeJS.Platform): string {
+  const impl = pathImpl(platform);
+  return ensureCliStorageRoot(impl.join(homeDir, ".zcode"), platform);
 }
 
-/** ZCode 的 slug 清洗：小写 → 非 `[a-z0-9._-]` 换 `-` → 去首尾 `-` → 截 48 → 空则 `project`。 */
+/** slug 清洗：小写 → 非 `[a-z0-9._-]` 换 `-` → 去首尾 `-` → 截 48 → 空则 `project`。 */
 export function sanitizeProjectSlug(value: string): string {
   const slug = value
     .toLowerCase()
@@ -63,22 +73,23 @@ export function sanitizeProjectSlug(value: string): string {
 
 /** 目录名（`<slug>-<hash16>`）与它的输入。 */
 export function computeProjectDirParts(input: MemoryDirInput): ProjectDirParts {
+  const impl = pathImpl(input.platform);
   const identity = input.workspaceIdentity?.trim();
-  const resolvedCwd = resolve(input.cwd);
+  const resolvedCwd = impl.resolve(input.cwd);
   const keySource =
     identity || ((input.platform ?? process.platform) === "win32" ? resolvedCwd.toLowerCase() : resolvedCwd);
   const hash = createHash("sha256").update(keySource).digest("hex").slice(0, 16);
-  const slug = identity ? "project" : sanitizeProjectSlug(basename(resolvedCwd) || "project");
+  const slug = identity ? "project" : sanitizeProjectSlug(impl.basename(resolvedCwd) || "project");
   return { slug, hash, dirName: `${slug}-${hash}` };
 }
 
 /** `memories/projects/` 根：三级回退第 3 步扫描的目录。 */
-export function projectsRootOf(storageRoot: string): string {
-  return join(storageRoot, "memories", "projects");
+export function projectsRootOf(storageRoot: string, platform?: NodeJS.Platform): string {
+  return pathImpl(platform).join(storageRoot, "memories", "projects");
 }
 
 /** `<storageRoot>/memories/projects/<slug>-<hash>/memory`。 */
 export function computeMemoryDir(input: MemoryDirInput): string {
   const parts = computeProjectDirParts(input);
-  return join(projectsRootOf(input.storageRoot), parts.dirName, "memory");
+  return pathImpl(input.platform).join(projectsRootOf(input.storageRoot, input.platform), parts.dirName, "memory");
 }

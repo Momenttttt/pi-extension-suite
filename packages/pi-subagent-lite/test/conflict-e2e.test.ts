@@ -20,9 +20,13 @@ import { createTempWorkspace, createTestSession, type TestSession } from "./test
 const cleanups: Array<() => void> = [];
 const sessions: TestSession[] = [];
 
+const originalAgentDirEnv = process.env.PI_CODING_AGENT_DIR;
+
 afterEach(() => {
   for (const session of sessions.splice(0)) session.dispose();
   for (const cleanup of cleanups.splice(0)) cleanup();
+  if (originalAgentDirEnv === undefined) delete process.env.PI_CODING_AGENT_DIR;
+  else process.env.PI_CODING_AGENT_DIR = originalAgentDirEnv;
 });
 
 /** 模拟 `@tintinweb/pi-subagents`：它用的是 `Agent` 这个名字。 */
@@ -36,13 +40,22 @@ const competitor: ExtensionFactory = (pi) => {
   });
 };
 
-/** 自建 agent 目录：不要读真实 `~/.pi/agent`，否则本机状态会让断言飘。 */
+/**
+ * 自建 agent 目录，并把 `PI_CODING_AGENT_DIR` 指过去。
+ *
+ * 这一步不能省：扩展是用 `resolveAgentDir()`（读环境变量、回落 `~/.pi/agent`）找档案目录的，
+ * 不是用会话的 agentDir。只造目录却不动环境变量，扩展就会去读**开发者本机真实的**
+ * `~/.pi/agent/agents/`——断言于是取决于那台机器上碰巧有什么文件。这个坑真发生过：
+ * 这条用例曾经在 Windows 上"通过"，仅仅因为本机恰好有一个用旧字段名的 Explore.md；
+ * 换到 Linux CI 上立刻失败（`expected '' to contain 'display_name'`）。
+ */
 function isolatedAgentDir(cwd: string, files: Record<string, string> = {}): string {
   const agentDir = join(cwd, ".pi-agent");
   mkdirSync(join(agentDir, "agents"), { recursive: true });
   for (const [name, body] of Object.entries(files)) {
     writeFileSync(join(agentDir, "agents", name), body, "utf8");
   }
+  process.env.PI_CODING_AGENT_DIR = agentDir;
   return agentDir;
 }
 
@@ -96,7 +109,7 @@ describe("票据 12：检测到同类扩展时明确告警", () => {
       extension: subagentLite,
       cwd,
       agentDir: isolatedAgentDir(cwd, {
-        // 照本机真实文件的样子：tintinweb 风格的旧字段名
+        // 用旧插件那套字段名，验证兼容别名与覆盖告警（夹具明确写在这里，不依赖本机状态）
         "Explore.md": [
           "---",
           "display_name: Explore",

@@ -13,6 +13,8 @@ import { replayReadState, type SessionEntryLike } from "../src/replay.ts";
 import { ReadStateTable } from "../src/state.ts";
 
 const CWD = "C:\\repo";
+/** 夹具走 win32 语义，且 `platform` 显式传下去——这样在 Linux CI 上也能覆盖 win32 分支。 */
+const PLATFORM = "win32" as const;
 
 let nextId = 0;
 function id(): string {
@@ -75,6 +77,7 @@ function replay(entries: SessionEntryLike[], firstKeptEntryId?: string | null) {
   const table = new ReadStateTable();
   const result = replayReadState(table, entries, {
     cwd: CWD,
+    platform: PLATFORM,
     ...(firstKeptEntryId === undefined ? {} : { firstKeptEntryId }),
   });
   return { table, result };
@@ -237,10 +240,10 @@ describe("票据 04：跨越压缩边界", () => {
 
   test("重建是整表替换，不是继续累积（换分支不串台）", () => {
     const table = new ReadStateTable();
-    replayReadState(table, readPair("c1", "branch-a.txt", 1_000), { cwd: CWD });
+    replayReadState(table, readPair("c1", "branch-a.txt", 1_000), { cwd: CWD, platform: PLATFORM });
     expect(table.get("c:/repo/branch-a.txt")).toBeDefined();
 
-    replayReadState(table, readPair("c2", "branch-b.txt", 2_000), { cwd: CWD });
+    replayReadState(table, readPair("c2", "branch-b.txt", 2_000), { cwd: CWD, platform: PLATFORM });
     expect(table.get("c:/repo/branch-a.txt")).toBeUndefined();
     expect(table.get("c:/repo/branch-b.txt")).toBeDefined();
   });

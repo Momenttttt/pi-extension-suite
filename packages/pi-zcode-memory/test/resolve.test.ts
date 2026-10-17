@@ -26,6 +26,8 @@ function layout(): { home: string; cwd: string; storageRoot: string; projectsRoo
   const home = tempDir("pi-memory-home-");
   const cwd = tempDir("pi-memory-cwd-");
   const storageRoot = join(home, ".zcode", "cli");
+  // 夹具是 mkdtemp 出来的**本机真实**路径，所以路径语义必须跟运行时一致：
+  // 这里不传 platform（默认运行时），下面的 resolveMemoryDir 调用也不传。
   const computedDir = computeMemoryDir({ cwd, storageRoot });
   return {
     home,
@@ -41,12 +43,7 @@ describe("resolveMemoryDir", () => {
     const { cwd, storageRoot, computedDir } = layout();
     mkdirSync(computedDir, { recursive: true });
     const configured = join(tempDir("pi-memory-config-"), "memory");
-    const resolution = resolveMemoryDir({
-      cwd,
-      configDir: configured,
-      storageRoot,
-      platform: "win32",
-    });
+    const resolution = resolveMemoryDir({ cwd, configDir: configured, storageRoot });
     expect(resolution.source).toBe("config");
     expect(resolution.dir).toBe(configured);
     expect(resolution.warnings).toEqual([]);
@@ -55,7 +52,7 @@ describe("resolveMemoryDir", () => {
   test("第 2 级：计算路径存在则用它", () => {
     const { cwd, storageRoot, computedDir } = layout();
     mkdirSync(computedDir, { recursive: true });
-    const resolution = resolveMemoryDir({ cwd, storageRoot, platform: "win32" });
+    const resolution = resolveMemoryDir({ cwd, storageRoot });
     expect(resolution.source).toBe("computed");
     expect(resolution.dir).toBe(computedDir);
     expect(resolution.warnings).toEqual([]);
@@ -66,7 +63,7 @@ describe("resolveMemoryDir", () => {
     const slug = sanitizeProjectSlug(basename(cwd));
     const candidate = join(projectsRoot, `${slug}-deadbeefdeadbeef`, "memory");
     mkdirSync(candidate, { recursive: true });
-    const resolution = resolveMemoryDir({ cwd, storageRoot, platform: "win32" });
+    const resolution = resolveMemoryDir({ cwd, storageRoot });
     expect(resolution.source).toBe("fallback");
     expect(resolution.dir).toBe(candidate);
     expect(resolution.computedDir).toBe(computedDir);
@@ -78,7 +75,7 @@ describe("resolveMemoryDir", () => {
     const slug = sanitizeProjectSlug(basename(cwd));
     mkdirSync(join(projectsRoot, `${slug}-1111111111111111`, "memory"), { recursive: true });
     mkdirSync(join(projectsRoot, `${slug}-2222222222222222`, "memory"), { recursive: true });
-    const resolution = resolveMemoryDir({ cwd, storageRoot, platform: "win32" });
+    const resolution = resolveMemoryDir({ cwd, storageRoot });
     expect(resolution.source).toBe("none");
     expect(resolution.dir).toBeUndefined();
     expect(resolution.warnings.join("\n")).toContain("无法判定");
@@ -87,14 +84,14 @@ describe("resolveMemoryDir", () => {
   test("存在 project- 前缀目录 → 提示 workspace identity", () => {
     const { cwd, storageRoot, projectsRoot } = layout();
     mkdirSync(join(projectsRoot, "project-3333333333333333", "memory"), { recursive: true });
-    const resolution = resolveMemoryDir({ cwd, storageRoot, platform: "win32" });
+    const resolution = resolveMemoryDir({ cwd, storageRoot });
     expect(resolution.source).toBe("none");
     expect(resolution.warnings.join("\n")).toContain("workspace identity");
   });
 
   test("什么都没有 → 尚无记忆且不建目录", () => {
     const { cwd, storageRoot, projectsRoot } = layout();
-    const resolution = resolveMemoryDir({ cwd, storageRoot, platform: "win32" });
+    const resolution = resolveMemoryDir({ cwd, storageRoot });
     expect(resolution.source).toBe("none");
     expect(resolution.dir).toBeUndefined();
     expect(resolution.warnings.join("\n")).toContain("尚无 ZCode 记忆");
@@ -104,7 +101,7 @@ describe("resolveMemoryDir", () => {
 
   test("homeDir 推导 storageRoot（默认路径形状）", () => {
     const { home, cwd } = layout();
-    const resolution = resolveMemoryDir({ cwd, homeDir: home, platform: "win32" });
+    const resolution = resolveMemoryDir({ cwd, homeDir: home });
     expect(resolution.computedDir.startsWith(join(home, ".zcode", "cli", "memories", "projects"))).toBe(true);
   });
 });

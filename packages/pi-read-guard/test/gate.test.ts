@@ -22,33 +22,66 @@ function entry(overrides: Partial<ReadStateEntry> = {}): ReadStateEntry {
   };
 }
 
-describe("normalizePathKey", () => {
+describe("normalizePathKey（win32 语义）", () => {
   test("相对路径按 cwd 解析为绝对路径", () => {
-    const key = normalizePathKey("src/a.ts", { cwd: "C:\\repo", caseInsensitive: false });
+    const key = normalizePathKey("src/a.ts", { cwd: String.raw`C:\repo`, caseInsensitive: false, platform: "win32" });
     expect(key).toBe("C:/repo/src/a.ts");
   });
 
   test("解析 .. 与 .", () => {
-    const key = normalizePathKey("./src/../lib/a.ts", { cwd: "C:\\repo", caseInsensitive: false });
+    const key = normalizePathKey("./src/../lib/a.ts", {
+      cwd: String.raw`C:\repo`,
+      caseInsensitive: false,
+      platform: "win32",
+    });
     expect(key).toBe("C:/repo/lib/a.ts");
   });
 
-  test("win32 折叠大小写（默认按平台）", () => {
-    const folded = normalizePathKey("C:\\Repo\\A.TS", { cwd: "C:\\", caseInsensitive: true });
-    const notFolded = normalizePathKey("C:\\Repo\\A.TS", { cwd: "C:\\", caseInsensitive: false });
+  test("win32 折叠大小写", () => {
+    const folded = normalizePathKey(String.raw`C:\Repo\A.TS`, { cwd: "C:\\", platform: "win32" });
+    const notFolded = normalizePathKey(String.raw`C:\Repo\A.TS`, {
+      cwd: "C:\\",
+      caseInsensitive: false,
+      platform: "win32",
+    });
     expect(folded).toBe("c:/repo/a.ts");
     expect(notFolded).toBe("C:/Repo/A.TS");
   });
 
+  test("默认的 caseInsensitive 取自**传入的平台**，不是跑测试的这台机器", () => {
+    // 这条是本次修 CI 的根因：以前默认读 process.platform，
+    // 于是 Linux 上跑这些 win32 用例全挂（CI 会红）。
+    const win = normalizePathKey(String.raw`C:\Repo\A.TS`, { cwd: "C:\\", platform: "win32" });
+    const linux = normalizePathKey("/Repo/A.TS", { cwd: "/", platform: "linux" });
+    expect(win).toBe("c:/repo/a.ts");
+    expect(linux).toBe("/Repo/A.TS");
+  });
+
   test("同一个文件的不同写法折叠成同一个键", () => {
-    const a = normalizePathKey("c:\\repo\\Foo\\a.ts", { cwd: "C:\\", caseInsensitive: true });
-    const b = normalizePathKey("C:/REPO/foo/A.TS", { cwd: "C:\\", caseInsensitive: true });
+    const a = normalizePathKey(String.raw`c:\repo\Foo\a.ts`, { cwd: "C:\\", platform: "win32" });
+    const b = normalizePathKey("C:/REPO/foo/A.TS", { cwd: "C:\\", platform: "win32" });
     expect(a).toBe(b);
+  });
+});
+
+describe("normalizePathKey（POSIX 语义）", () => {
+  test("相对路径按 cwd 解析，不折叠大小写", () => {
+    expect(normalizePathKey("src/a.ts", { cwd: "/repo", platform: "linux" })).toBe("/repo/src/a.ts");
+    expect(normalizePathKey("Src/A.ts", { cwd: "/repo", platform: "linux" })).toBe("/repo/Src/A.ts");
+  });
+
+  test("反斜杠在 POSIX 上是合法文件名字符，不能当分隔符", () => {
+    const key = normalizePathKey(String.raw`weird\name.ts`, { cwd: "/repo", platform: "darwin" });
+    expect(key).toBe(String.raw`/repo/weird\name.ts`);
+  });
+
+  test("macOS 也走 POSIX 语义", () => {
+    expect(normalizePathKey("SRC/A.ts", { cwd: "/Users/me", platform: "darwin" })).toBe("/Users/me/SRC/A.ts");
   });
 
   test("NFC 归一化让组合字符与预组合字符同键", () => {
-    const composed = normalizePathKey("caf\u00e9.ts", { cwd: "/repo", caseInsensitive: false });
-    const decomposed = normalizePathKey("cafe\u0301.ts", { cwd: "/repo", caseInsensitive: false });
+    const composed = normalizePathKey("caf\u00e9.ts", { cwd: "/repo", platform: "linux" });
+    const decomposed = normalizePathKey("cafe\u0301.ts", { cwd: "/repo", platform: "linux" });
     expect(composed).toBe(decomposed);
   });
 });
@@ -174,9 +207,10 @@ describe("decideWriteGate 判定表", () => {
 });
 
 describe("helm 小工具", () => {
-  test("displayPathOf 在 cwd 内给相对路径", () => {
-    expect(displayPathOf("C:\\repo\\src\\a.ts", "C:\\repo")).toBe("src\\a.ts");
-    expect(displayPathOf("D:\\other\\a.ts", "C:\\repo")).toBe("D:\\other\\a.ts");
+  test("displayPathOf 在 cwd 内给相对路径（按平台选分隔符）", () => {
+    expect(displayPathOf(String.raw`C:\repo\src\a.ts`, String.raw`C:\repo`, "win32")).toBe(String.raw`src\a.ts`);
+    expect(displayPathOf(String.raw`D:\other\a.ts`, String.raw`C:\repo`, "win32")).toBe(String.raw`D:\other\a.ts`);
+    expect(displayPathOf("/repo/src/a.ts", "/repo", "linux")).toBe("src/a.ts");
   });
 
   test("hashContent 稳定且区分内容", () => {
