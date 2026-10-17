@@ -87,12 +87,23 @@ export interface TestSessionOptions {
   settings?: Record<string, unknown>;
   /** agent 目录；默认落在 `<cwd>/.pi-agent`。 */
   agentDir?: string;
+  /**
+   * 会话落盘目录。给了就用 `SessionManager.create(cwd, sessionDir)`，会话会写成真的
+   * 会话文件——测 resume / 压缩 / 换分支这类生命周期行为必须这样（`inMemory` 没有文件）。
+   */
+  sessionDir?: string;
+  /** 从一个已有会话文件恢复：`SessionManager.open(path, sessionDir, cwd)`。 */
+  resumeFrom?: string;
+  /** 从内存里的条目起会话（避免碰磁盘）。 */
+  inMemoryEntries?: unknown[];
 }
 
 export interface TestSession {
   session: AgentSession;
   /** 桩 provider 依次收到的请求。 */
   requests: CapturedRequest[];
+  /** 当前会话文件；用 `SessionManager.inMemory` 或还没写盘时为 undefined。 */
+  sessionFile: () => string | undefined;
   /** 追加应答脚本（在调用 `run` 之前用）。 */
   pushResponses: (...steps: StubStep[]) => void;
   /** 跑一轮，返回本轮结束后的最后助手文本。 */
@@ -308,11 +319,17 @@ export async function createTestSession(options: TestSessionOptions): Promise<Te
   });
   await loader.reload();
 
+  const sessionManager = options.resumeFrom
+    ? SessionManager.open(options.resumeFrom, options.sessionDir, cwd)
+    : options.sessionDir
+      ? SessionManager.create(cwd, options.sessionDir)
+      : SessionManager.inMemory(cwd);
+
   const { session, extensionsResult } = await createAgentSession({
     cwd,
     agentDir,
     resourceLoader: loader,
-    sessionManager: SessionManager.inMemory(cwd),
+    sessionManager,
     settingsManager: SettingsManager.inMemory({
       compaction: { enabled: false },
       ...(options.settings as object),
@@ -336,9 +353,17 @@ export async function createTestSession(options: TestSessionOptions): Promise<Te
     throw new Error(`扩展加载失败：${JSON.stringify(errors, null, 2)}`);
   }
 
+  // `createAgentSession` 只建会话、**不**派发 `session_start`——那一步在 `bindExtensions()`
+  // 里（`dist/core/session-start` 的调用点在 agent-session.js:2651）。真实运行由 CLI / RPC
+  // 的宿主调用它。少了这一句，所有依赖 `session_start` 的扩展行为（读态重建、索引注入、
+  // 工具冲突扫描）在测试里都不会发生，而 `tool_call` / `tool_result` 照常工作——
+  // 表现为"测试通过但扩展没初始化"，非常难查。
+  await session.bindExtensions({});
+
   return {
     session,
     requests,
+    sessionFile: () => session.sessionFile,
     pushResponses: (...steps: StubStep[]) => script.push(...steps),
     run: async (text: string) => {
       await session.prompt(text);

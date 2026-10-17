@@ -52,6 +52,8 @@ const readGuard: ExtensionFactory = (pi: ExtensionAPI): void => {
 
   const rebuild = (ctx: ExtensionContext, firstKeptEntryId?: string | null): void => {
     const manager = ctx.sessionManager;
+    // 重建是"整表替换"而不是"继续累积"：表的内容必须完全由当前分支的条目决定，
+    // 否则上一次会话（或另一条分支）留下的记录会污染判定。
     // `getBranch()` 返回 pi 的 `SessionEntry` 联合类型；replay 只读结构化字段，
     // 收窄到自己的最小形状即可（也为将来 pi 给条目加字段留出余量）。
     const branch = manager.getBranch() as unknown as SessionEntryLike[];
@@ -66,12 +68,13 @@ const readGuard: ExtensionFactory = (pi: ExtensionAPI): void => {
     rebuild(ctx);
   });
 
+  // 换分支：另一条分支上的读记录不能串台
   pi.on("session_tree", (_event, ctx) => {
-    table.clear();
     rebuild(ctx);
   });
 
-  // 压缩后**不清空**：用保留尾部重建。落在摘要区里的读记录自然消失 → 模型必须重读。
+  // 压缩：**不清空整表**，只按 `firstKeptEntryId` 之后的保留尾部重建。
+  // 落在摘要区里的读记录自然消失 → 模型必须重读，这是正确的保守行为。
   pi.on("session_compact", (event, ctx) => {
     rebuild(ctx, event.compactionEntry.firstKeptEntryId);
   });
