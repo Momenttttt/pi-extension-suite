@@ -105,7 +105,7 @@ ZCode 的前台写本来就没有跨进程锁（只有 Dream 持 `.consolidate-l
 
 **为什么 `memory_read` 后要发读态事件？**
 用 `memory_read` 读过的记忆，紧接着用内置 `edit` 修改时不应该再被
-[pi-read-guard](https://github.com/Momenttttt/pi-package) 要求"先读"。两个包通过
+[pi-read-guard](https://github.com/Momenttttt/pi-extension-suite) 要求"先读"。两个包通过
 `pi.events` 共享总线互通（频道 `read-guard/file-read`）：发布方只 `emit`，接收方只 `on`，
 任一方缺席时静默降级，没有 import 依赖。相比"配置声明的读态提供方"，少一层配置形状与
 解析规则，收益相同。截断读发布 `kind: "truncated"` 且不带内容 hash —— 截断读不能成为
