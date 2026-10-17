@@ -23,7 +23,7 @@ pi -e ./packages/pi-context-guard/extensions/context-guard.ts
 | 档 | 条件 | 默认 |
 | --- | --- | --- |
 | 空闲档 | 距上一条 assistant 消息 ≥ `gapThresholdMinutes`（60 分钟）且可清理结果条数 > `keepRecent` | **自动** |
-| 体积档 | 可清理正文（UTF-8 字节）合计 > `maxClearableBytes`（256 KiB）且条数 > `keepRecent` | **手动**：`/ctx compact`；`autoVolumeTrigger: true` 改为自动 |
+| 体积档 | 可清理正文（UTF-8 字节）合计 > `maxClearableBytes`（256 KiB）且条数 > `keepRecent` | **手动**：`/ctx prune`；`autoVolumeTrigger: true` 改为自动 |
 
 空闲档默认 60 分钟，恰好是服务端 prompt 缓存 TTL——空闲到此缓存本来就冷，此时改写历史前缀的缓存代价最低。
 
@@ -77,13 +77,18 @@ pi -e ./packages/pi-context-guard/extensions/context-guard.ts
 
 一条命令看清状态：上下文占用（tokens / 窗口 / 百分比）、本会话清理统计（条数与省下的字节）、裁剪条数、压缩失败次数、CC 对照提示。
 
-- `/ctx compact` — 用体积档的选择集**立刻**清一次，不等空闲。**阈值仍然生效**：保留尾部之外的可清理正文没超过 `maxClearableBytes` 时它不会动手（体积档的定义本身就包含阈值），只会告诉你还差多少
+> **`/ctx prune` 和 pi 内建的 `/compact` 不是一回事，别混。**
+> `/compact`（pi 自带）会**调用模型**把较早的历史总结成摘要——有损、不可撤销，而且它才是真正决定"自动压缩什么时候触发"的那套账。
+> `/ctx prune` 只是把较早的**工具结果正文**换成占位符——**不调模型、不落盘、可撤销**，也不改变自动压缩的触发点。
+> 本项目里"压缩（compaction）"与"微压缩（microcompact）"是两个不同的词，命令名也就分开：前者归 pi，后者归这里。
+
+- `/ctx prune` — 用体积档的选择集**立刻**清一次，不等空闲。**阈值仍然生效**：保留尾部之外的可清理正文没超过 `maxClearableBytes` 时它不会动手（体积档的定义本身就包含阈值），只会告诉你还差多少
 - `/ctx undo-snip` — 撤销最近一次裁剪
 
 ## 设计取舍
 
 **为什么默认救不了正在跑的长会话？**
-空闲档只在会话空闲 ≥ 60 分钟后才动手——这是与 Claude Code 默认保持一致，也因为它让改写历史前缀的代价落在缓存本来就冷的时候。**代价必须说清：一个持续活跃、图片越堆越多的会话不会被自动救**，需要手动 `/ctx compact` 一次，或者打开 `autoVolumeTrigger`。装上本包不等于"再也不会撞字节墙"。
+空闲档只在会话空闲 ≥ 60 分钟后才动手——这是与 Claude Code 默认保持一致，也因为它让改写历史前缀的代价落在缓存本来就冷的时候。**代价必须说清：一个持续活跃、图片越堆越多的会话不会被自动救**，需要手动 `/ctx prune` 一次，或者打开 `autoVolumeTrigger`。装上本包不等于"再也不会撞字节墙"。
 
 **为什么 `snip` 工具一直对模型可见，而不是按需激活？**
 按需激活（注册为 `deferred`，上下文用量超阈值时用 `pi.setActiveTools()` 打开）会**改变工具列表**。pi 会为工具集变化在转录里追加记录，provider 无法表达该增量时会收到完整检查点，**可能作废缓存前缀**——省下的提示词成本不如缓存失效亏得多。代价是每轮多几十 token 的提示词，接受。

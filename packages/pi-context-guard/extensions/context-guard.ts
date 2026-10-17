@@ -72,7 +72,15 @@ import {
 import { decideClearTrigger } from "../src/trigger.ts";
 
 /** `/ctx` 的子命令（也是参数补全的来源）。 */
-const CTX_SUBCOMMANDS = ["compact", "undo-snip"] as const;
+/**
+ * `/ctx` 的子命令。
+ *
+ * 这里**特意不叫 `compact`**：pi 内建有一个 `/compact`（"Manually compact the session context"），
+ * 那是"调模型把较早历史总结成摘要"的有损操作；我们做的是"把较早的工具结果换成占位符"的机械清理
+ * ——不调模型、可逆、也不影响自动压缩的触发点。同一个词指两件事正是 GLOSSARY 明令禁止的混用
+ * （压缩 vs 微压缩），放到斜杠命令上就是给用户下绊子。所以叫 `prune`。
+ */
+const CTX_SUBCOMMANDS = ["prune", "undo-snip"] as const;
 
 const contextGuard: ExtensionFactory = (pi: ExtensionAPI): void => {
   const state = new ContextGuardState();
@@ -295,16 +303,19 @@ const contextGuard: ExtensionFactory = (pi: ExtensionAPI): void => {
   // ------------------------------------------------------------------ /ctx 状态命令
 
   pi.registerCommand("ctx", {
-    description: "上下文占用与清理状态；子命令 compact / undo-snip",
+    description: "上下文占用与清理状态；子命令 prune / undo-snip",
     getArgumentCompletions: (prefix) =>
       CTX_SUBCOMMANDS.filter((sub) => sub.startsWith(prefix)).map((sub) => ({
         value: sub,
         label: sub,
-        description: sub === "compact" ? "立刻按体积档清理较早的工具结果" : "撤销最近一次裁剪",
+        description:
+          sub === "prune"
+            ? "立刻按体积档清理较早的工具结果（不调模型、可逆；与 pi 内建的 /compact 不是一回事）"
+            : "撤销最近一次裁剪",
       })),
     handler: async (args, ctx) => {
       const sub = args.trim();
-      if (sub === "compact") {
+      if (sub === "prune") {
         runManualCompact(pi, state, ctx, configOf(ctx));
         return;
       }
@@ -366,7 +377,7 @@ function hasTrailingShortId(content: unknown): boolean {
 }
 
 /**
- * `/ctx compact`：用**体积档的选择集**立刻清一次（不等空闲）。
+ * `/ctx prune`：用**体积档的选择集**立刻清一次（不等空闲）。
  *
  * 命令在主线程执行，可以安全地直接推进水位并落盘；下一次请求就会变小。
  *
@@ -457,7 +468,7 @@ function statusReport(state: ContextGuardState, ctx: ExtensionContext): string {
     `裁剪：${state.activeSnipCount()} 条已裁剪（可撤销）`,
     `压缩失败：连续 ${state.failures} 次${state.failures >= 3 ? "——建议手动 /compact 或换模型" : ""}`,
     "CC 对照：pi 默认阈值 = 窗口 − reserveTokens(16384)，比 Claude Code 更早触发；要贴近 CC 可设 compaction.reserveTokens = 33000",
-    "子命令：/ctx compact 立刻清理较早的工具结果；/ctx undo-snip 撤销最近一次裁剪",
+    "子命令：/ctx prune 立刻清理较早的工具结果（不调模型、可逆；区别于 pi 内建的 /compact 汇总）；/ctx undo-snip 撤销最近一次裁剪",
   ];
   return lines.join("\n");
 }

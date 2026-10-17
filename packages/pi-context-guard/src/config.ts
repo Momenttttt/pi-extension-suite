@@ -16,7 +16,7 @@ export interface ContextGuardConfig {
   maxClearableBytes: number;
   /** 空闲档：距上一条 assistant 消息的空闲分钟数（默认 60，即服务端 prompt 缓存 TTL）。 */
   gapThresholdMinutes: number;
-  /** 体积档是否自动（默认 false：会话中途改写历史与 CC 默认不一致，留给手动 `/ctx compact`）。 */
+  /** 体积档是否自动（默认 false：会话中途改写历史与 CC 默认不一致，留给手动 `/ctx prune`）。 */
   autoVolumeTrigger: boolean;
   /** 插件 04 的 `subagent` 结果是否可清理（默认 false）。 */
   clearSubagentResults: boolean;

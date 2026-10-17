@@ -8,7 +8,7 @@
  *   - 空闲档：距上一条 assistant 消息 ≥ gapThresholdMinutes（默认 60）——服务端
  *     prompt 缓存 TTL 是 1 小时，空闲到此本来就冷，此时改前缀代价最低。默认开。
  *   - 体积档：保留尾部之外的可清理正文 > maxClearableBytes（默认 256 KiB）。
- *     手动 `/ctx compact` 走它；`autoVolumeTrigger: true` 才自动。
+ *     手动 `/ctx prune` 走它；`autoVolumeTrigger: true` 才自动。
  */
 import type { ClearSelection } from "./clear.ts";
 import { isAssistantMessage, messageTimestampMs, type MessageLike } from "./messages.ts";

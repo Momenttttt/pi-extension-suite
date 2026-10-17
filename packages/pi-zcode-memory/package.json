@@ -5,7 +5,12 @@
   "license": "MIT",
   "type": "module",
   "keywords": [
-    "pi-package"
+    "pi-package",
+    "pi",
+    "pi-extension",
+    "memory",
+    "zcode",
+    "project-memory"
   ],
   "repository": {
     "type": "git",
@@ -36,5 +41,8 @@
   },
   "scripts": {
     "test": "vitest run --root ../.."
+  },
+  "engines": {
+    "node": ">=22.19.0"
   }
 }

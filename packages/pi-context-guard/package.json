@@ -5,7 +5,13 @@
   "license": "MIT",
   "type": "module",
   "keywords": [
-    "pi-package"
+    "pi-package",
+    "pi",
+    "pi-extension",
+    "context",
+    "compaction",
+    "microcompact",
+    "snip"
   ],
   "repository": {
     "type": "git",
@@ -34,5 +40,8 @@
   },
   "scripts": {
     "test": "vitest run --root ../.."
+  },
+  "engines": {
+    "node": ">=22.19.0"
   }
 }

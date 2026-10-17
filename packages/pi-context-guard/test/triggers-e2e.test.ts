@@ -3,7 +3,7 @@
  *
  * 三档各跑一次真实请求流：
  *   - 空闲档：`gapThresholdMinutes: 0` 时自动清理；默认 60 分钟时不清理
- *   - 体积档手动：`/ctx compact` 立刻推进水位，下一次请求变小
+ *   - 体积档手动：`/ctx prune` 立刻推进水位，下一次请求变小
  *   - 体积档自动：`autoVolumeTrigger: true` 时不需要命令
  * 以及决策稳定性：相邻两次请求的清理集合一致。
  */
@@ -86,7 +86,7 @@ describe("空闲档", () => {
   });
 });
 
-describe("体积档：/ctx compact 手动", () => {
+describe("体积档：/ctx prune 手动", () => {
   test("正文没超过体积档阈值时不清（体积档的定义本身包含阈值）", async () => {
     const cwd = workspace();
     // 小文件：保留尾部之外的可清理正文远小于阈值
@@ -100,7 +100,7 @@ describe("体积档：/ctx compact 手动", () => {
     ]);
 
     await test.run("read small.txt twice");
-    await test.run("/ctx compact");
+    await test.run("/ctx prune");
     await test.run("继续");
 
     // 没越线 → 水位不动 → 请求里不该出现占位符
@@ -128,7 +128,7 @@ describe("体积档：/ctx compact 手动", () => {
     expect(containsPlaceholder(test.requests[2]!)).toBe(false);
 
     // 命令本身不发请求
-    await test.run("/ctx compact");
+    await test.run("/ctx prune");
     expect(test.requests).toHaveLength(3);
 
     await test.run("继续");

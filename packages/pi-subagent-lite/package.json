@@ -5,7 +5,12 @@
   "license": "MIT",
   "type": "module",
   "keywords": [
-    "pi-package"
+    "pi-package",
+    "pi",
+    "pi-extension",
+    "subagent",
+    "agent",
+    "delegation"
   ],
   "repository": {
     "type": "git",
@@ -33,5 +38,8 @@
   },
   "scripts": {
     "test": "vitest run --root ../.."
+  },
+  "engines": {
+    "node": ">=22.19.0"
   }
 }
