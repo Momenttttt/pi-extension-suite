@@ -33,8 +33,8 @@ test("extractRefs 跳过 URL、锚点与本机绝对路径", () => {
     [
       "[npm](https://www.npmjs.com/package/x)",
       "[锚点](#section)",
-      "`D:\\NodeJS\\noteJs\\package.json`",
-      "`E:/refs/docs/design/README.md`",
+      "`D:\\tools\\node\\package.json`",
+      "`/opt/refs/docs/design/README.md`",
     ].join("\n"),
   );
   assert.deepEqual(refs, []);
