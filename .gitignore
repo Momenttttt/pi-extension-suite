@@ -8,6 +8,9 @@ node_modules/
 /CODING_STANDARDS.md
 /.scratch/
 
+# 本机 git 钩子：只约束本机提交（提交身份与提交信息格式），对外没有价值，装法见 AGENTS.md
+/.githooks/
+
 # 产物与系统垃圾
 coverage/
 *.tsbuildinfo

@@ -1,6 +1,7 @@
 # 让 git 负责行尾归一化（本机工作树是 CRLF，仓库内统一 LF）
 * text=auto
 
-# 钩子是 shell 脚本，必须保持 LF——CRLF 会让 `#!/bin/sh` 那行带上 \r 而无法执行
-.githooks/* text eol=lf
+# shell 脚本必须保持 LF：CRLF 会让 `#!/bin/sh` 那行带上 \r 而无法执行。
+# 注意 `.githooks/` 是本机文件（被 gitignore、不进仓库），不在这条规则的保护范围内；
+# 若哪天要把它放回仓库，必须同时补回 `.githooks/* text eol=lf`（见 AGENTS.md）。
 *.sh text eol=lf
