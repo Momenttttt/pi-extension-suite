@@ -63,7 +63,10 @@ export function hashContent(content: string): string {
 
 export type WriteGateAction = "allow" | "block";
 
-/** 阻断原因，落在 tool_call 结果的 details.code 里，文案另给。 */
+/**
+ * 阻断原因。pi 的 `tool_call` 结果只有 `{ block, reason, terminate }`，没有结构化的
+ * `details`，所以这个代码最终以固定格式落在 `reason` 的最后一行（由扩展层拼上去）。
+ */
 export type WriteGateCode = "not_read" | "truncated_read" | "modified_since_read";
 
 export interface WriteGateDecision {
@@ -154,13 +157,6 @@ export function decideWriteGate(
     code: "modified_since_read",
     reason: messages.modifiedSinceRead(input.displayPath),
   };
-}
-
-/** 工具输入里的路径（`read` / `edit` / `write` 都是 `{ path }`）。 */
-export function extractToolPath(input: unknown): string | undefined {
-  if (typeof input !== "object" || input === null) return undefined;
-  const value = (input as { path?: unknown }).path;
-  return typeof value === "string" && value.length > 0 ? value : undefined;
 }
 
 /** 会话 cwd 与路径之间只差一个分隔符时，展示用的相对路径更短。 */

@@ -131,11 +131,8 @@ export class ContextGuardState {
         restores.push(op);
       }
     }
-    if (ops.length > 0) this.lastCommitAt = now;
     return { snips, restores };
   }
-
-  lastCommitAt: number | undefined;
 
   activeSnipTargets(): string[] {
     return [...this.activeSnips.keys()];
@@ -159,11 +156,6 @@ export class ContextGuardState {
     this.reliefPending = true;
   }
 
-  recordSuccess(): void {
-    this.failures = 0;
-    this.reliefPending = false;
-  }
-
   reset(): void {
     this.watermark = undefined;
     this.totalCount = 0;
@@ -172,7 +164,6 @@ export class ContextGuardState {
     this.failures = 0;
     this.reliefPending = false;
     this.watermarkDirty = false;
-    this.lastCommitAt = undefined;
     this.pending.clear();
     this.activeSnips.clear();
   }

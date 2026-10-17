@@ -46,7 +46,8 @@ pi -e ./packages/pi-context-guard/extensions/context-guard.ts
 
 模型可以调用 `snip({ from, to, reason? })`，用短 id 指认一段较早的历史。短 id 是**只在请求里**给用户消息追加的 `\n[id:xxxxxx]` 后缀（由 `sha256(role + ":" + timestamp)` 前 6 位 base36 派生），存储副本不动。
 
-- 裁剪通过在 `turn_end`（首选）或 `agent_before_settle`（兜底）提交一条 pi 原生的 `context_edit{replacement: null}` 实现——pi 读时投影，**原始条目仍在会话文件里**，也因此裁剪会真实地推迟 pi 的自动压缩触发点。
+- 裁剪通过在 `turn_end`（首选）或 `agent_before_settle`（兜底）提交一条 pi 原生的 `context_edit{replacement: null}` 实现——pi 的读时投影，**原始条目仍在会话文件里**。
+- `context_edit` 进的是 pi 自己的投影，所以 pi 重算 `tokensBefore` 时会看到裁剪后的历史——这是 pi 的机制（`docs/compaction.md` 明写"基于重建后的、经过 context 编辑的投影"），不是我们额外做的。**本项目没有断言"裁剪把自动压缩推迟了多少"的测试**：那需要真模型跑两条路径对比，属节点外的验收，别把它当成已测行为。
 - 禁止裁当前正在进行的回合；区间端点必须存在，报错时列出可用 id。
 - `/ctx undo-snip` 提交一条恢复性 `context_edit`（内容取自原条目），并渲染一行"已恢复 N 条历史"。
 - 会话里会出现一条 `custom` 审计条目，渲染成"已裁剪 N 条历史（可撤销）"，避免用户以为消息丢了。
@@ -76,7 +77,7 @@ pi -e ./packages/pi-context-guard/extensions/context-guard.ts
 
 一条命令看清状态：上下文占用（tokens / 窗口 / 百分比）、本会话清理统计（条数与省下的字节）、裁剪条数、压缩失败次数、CC 对照提示。
 
-- `/ctx compact` — 用体积档的选择集**立刻**清一次，不等空闲
+- `/ctx compact` — 用体积档的选择集**立刻**清一次，不等空闲。**阈值仍然生效**：保留尾部之外的可清理正文没超过 `maxClearableBytes` 时它不会动手（体积档的定义本身就包含阈值），只会告诉你还差多少
 - `/ctx undo-snip` — 撤销最近一次裁剪
 
 ## 设计取舍

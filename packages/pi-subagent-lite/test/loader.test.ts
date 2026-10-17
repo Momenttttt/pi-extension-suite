@@ -45,10 +45,16 @@ async function loadOurExtension(cwd: string): Promise<{ extension: Extension; er
   return { extension: extension as Extension, errors: result.errors };
 }
 
-/** 只实现被测扩展用到的字段（`ui.notify` 与 `modelRegistry.find`）。 */
+/**
+ * 只实现被测扩展用到的字段（`ui.notify` 与 `modelRegistry.find`）。
+ *
+ * `hasUI: true` 是必需的：扩展按设计共同约定 7 在通知前会看 `ctx.hasUI`，
+ * 这里要断言通知内容，就得让这个上下文像"有 UI 的宿主"。
+ */
 function fakeContext(cwd: string, notifications: string[]) {
   return {
     cwd,
+    hasUI: true,
     ui: { notify: (message: string) => notifications.push(message) },
     modelRegistry: { find: () => undefined },
     sessionManager: { getBranch: () => [], getCwd: () => cwd },

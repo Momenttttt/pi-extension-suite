@@ -68,7 +68,7 @@ const zcodeMemory: ExtensionFactory = (pi: ExtensionAPI): void => {
   };
 
   const rebuildInjectionState = (ctx: ExtensionContext): void => {
-    // 会话投影已按压缩保留尾部裁剪：注入消息被摘要掉后这里就找不到它了
+    // 会话投影只包含压缩后的保留尾部：注入消息被摘要掉后这里就找不到它了
     const projection = ctx.sessionManager.buildSessionProjection();
     injectedHash = rebuildInjectedHash(projection.entries.map((entry) => entry.sourceEntry));
   };
@@ -311,11 +311,11 @@ const zcodeMemory: ExtensionFactory = (pi: ExtensionAPI): void => {
       const subcommand = args.trim().toLowerCase();
       if (subcommand === "reload") {
         forceInject = true;
-        ctx.ui.notify("memory：下一次运行会重新注入 MEMORY.md 索引。", "info");
+        notify(ctx, "memory：下一次运行会重新注入 MEMORY.md 索引。", "info");
         return;
       }
       if (subcommand.length > 0 && subcommand !== "status") {
-        ctx.ui.notify("memory：用法是 /memory（状态）或 /memory reload（强制重新注入）。", "warning");
+        notify(ctx, "memory：用法是 /memory（状态）或 /memory reload（强制重新注入）。", "warning");
         return;
       }
       const { resolution } = resolveFor(ctx);
@@ -335,16 +335,15 @@ const zcodeMemory: ExtensionFactory = (pi: ExtensionAPI): void => {
         files,
         injectionLabel: injectionLabel(resolution, indexContent, injectedHash, forceInject),
       });
-      ctx.ui.notify(text, "info");
+      notify(ctx, text, "info");
     },
   });
 
   function warnMissingMemoryDir(ctx: ExtensionContext, resolution: MemoryDirResolution): void {
     if (missingDirWarned) return;
     missingDirWarned = true;
-    if (!ctx.hasUI) return;
     const hint = resolution.warnings.length > 0 ? ` ${resolution.warnings[resolution.warnings.length - 1]}` : "";
-    ctx.ui.notify(`memory：这次没有注入记忆索引——该项目尚无 ZCode 记忆。${hint}`, "warning");
+    notify(ctx, `memory：这次没有注入记忆索引——该项目尚无 ZCode 记忆。${hint}`, "warning");
   }
 };
 
@@ -442,6 +441,21 @@ function injectionLabel(
   if (force) return "已排队：下一次运行重新注入";
   if (injectedHash === undefined) return "未注入（下一次运行会注入）";
   return `已注入（hash ${injectedHash.slice(0, 12)}…）`;
+}
+
+/**
+ * 按设计共同约定 7：所有 UI 交互先看 `ctx.hasUI`。
+ *
+ * 非交互模式（print / json）没有 UI；显式守一道不是为了防崩，而是让"这里依赖渲染"
+ * 在代码里看得见——真实运行里 `ctx.ui` 的无操作实现会吞掉内容，静默通过很难被发现。
+ */
+function notify(
+  ctx: { hasUI: boolean; ui: { notify(message: string, kind?: "info" | "warning" | "error"): void } },
+  message: string,
+  kind?: "info" | "warning" | "error",
+): void {
+  if (!ctx.hasUI) return;
+  ctx.ui.notify(message, kind);
 }
 
 export default zcodeMemory;

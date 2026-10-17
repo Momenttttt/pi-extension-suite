@@ -175,7 +175,7 @@ const readGuard: ExtensionFactory = (pi: ExtensionAPI): void => {
     if (decision.action === "allow") return;
 
     if (configNow.mode === "warn") {
-      ctx.ui.notify(`read-guard（warn）：${decision.reason ?? "写入未通过读水位检查"}`, "warning");
+      notify(ctx, `read-guard（warn）：${decision.reason ?? "写入未通过读水位检查"}`, "warning");
       return;
     }
 
@@ -252,6 +252,21 @@ const readGuard: ExtensionFactory = (pi: ExtensionAPI): void => {
 export default readGuard;
 export { readGuard as readGuardFactory };
 export type { ReadGuardConfig };
+
+/**
+ * 按设计共同约定 7：所有 UI 交互先看 `ctx.hasUI`。
+ *
+ * 非交互模式（print / json）没有 UI；显式守一道不是为了防崩，而是让"这里依赖渲染"
+ * 在代码里看得见——真实运行里 `ctx.ui` 的无操作实现会吞掉内容，静默通过很难被发现。
+ */
+function notify(
+  ctx: { hasUI: boolean; ui: { notify(message: string, kind?: "info" | "warning" | "error"): void } },
+  message: string,
+  kind?: "info" | "warning" | "error",
+): void {
+  if (!ctx.hasUI) return;
+  ctx.ui.notify(message, kind);
+}
 
 function withCode(reason: string, code: WriteGateCode | undefined): string {
   return code ? `${reason}\n（read-guard: ${code}）` : reason;

@@ -131,7 +131,7 @@ const contextGuard: ExtensionFactory = (pi: ExtensionAPI): void => {
   pi.on("session_compact_failed", (event, ctx) => {
     state.recordFailure();
     if (shouldWarnCompactionFailures(state.failures)) {
-      ctx.ui.notify(
+      notify(ctx, 
         `context-guard：连续 ${state.failures} 次压缩失败（reason: ${event.reason}），已改为按体积档降压力；建议手动 /compact 或换模型。`,
         "warning",
       );
@@ -312,7 +312,7 @@ const contextGuard: ExtensionFactory = (pi: ExtensionAPI): void => {
         runUndoSnip(pi, state, ctx);
         return;
       }
-      ctx.ui.notify(statusReport(state, ctx), state.failures >= 3 ? "warning" : "info");
+      notify(ctx, statusReport(state, ctx), state.failures >= 3 ? "warning" : "info");
     },
   });
 
@@ -366,11 +366,13 @@ function hasTrailingShortId(content: unknown): boolean {
 }
 
 /**
- * `/ctx compact`：用体积档选择集**立刻**清一次（不等空闲）。
+ * `/ctx compact`：用**体积档的选择集**立刻清一次（不等空闲）。
  *
  * 命令在主线程执行，可以安全地直接推进水位并落盘；下一次请求就会变小。
- * 显式命令不再额外要求"超过 maxClearableBytes"——用户已经明确要求清理，
- * 阈值只是自动档的条件（设计 §2.3 的体积档条件归属于 `autoVolumeTrigger`）。
+ *
+ * 体积档的定义本身包含阈值：保留尾部之外的可清理正文合计要超过 `maxClearableBytes`
+ * （设计 §2.3）。所以这里先按 `extend: false` 算一遍统计、比对阈值，只有真的越线才动手；
+ * 不然"体积档选择集"就只是"清掉所有能清的"，与文档承诺的不是同一个东西。
  */
 function runManualCompact(
   pi: ExtensionAPI,
@@ -381,18 +383,35 @@ function runManualCompact(
   const messages = ctx.sessionManager
     .buildSessionProjection()
     .messages as unknown as MessageLike[];
+  const options = {
+    clearSubagentResults: configNow.clearSubagentResults,
+    clearMemoryResults: configNow.clearMemoryResults,
+  };
+  const measurement = selectClearableResults({
+    messages,
+    options,
+    keepRecent: configNow.keepRecent,
+    watermark: state.watermark,
+    extend: false,
+  });
+  if (measurement.pendingBytesBeyondKeepRecent <= configNow.maxClearableBytes) {
+    notify(ctx,
+      `context-guard：保留最近 ${configNow.keepRecent} 条之外的可清理正文只有 ≈${formatBytes(measurement.pendingBytesBeyondKeepRecent)}，` +
+        `没超过体积档阈值 ${formatBytes(configNow.maxClearableBytes)}，这次的体积档不适用。` +
+        "（空闲档会在会话空闲后自动清；要调整阈值改 maxClearableBytes。）",
+      "info",
+    );
+    return;
+  }
   const plan = selectClearableResults({
     messages,
-    options: {
-      clearSubagentResults: configNow.clearSubagentResults,
-      clearMemoryResults: configNow.clearMemoryResults,
-    },
+    options,
     keepRecent: configNow.keepRecent,
     watermark: state.watermark,
     extend: true,
   });
   if (!plan.extended) {
-    ctx.ui.notify(
+    notify(ctx, 
       `context-guard：没有可清理的结果（保留最近 ${configNow.keepRecent} 条，或已全部清理）。`,
       "info",
     );
@@ -400,7 +419,7 @@ function runManualCompact(
   }
   state.promoteWatermark(plan, "manual");
   pi.appendEntry(WATERMARK_ENTRY, state.watermarkData(Date.now()));
-  ctx.ui.notify(
+  notify(ctx, 
     `context-guard：已清理 ${plan.extendedTargets.length} 条较早的工具结果（≈${formatBytes(plan.extendedTargets.reduce((sum, target) => sum + target.bytes, 0))} 正文），下一次请求生效。`,
     "info",
   );
@@ -410,12 +429,12 @@ function runManualCompact(
 function runUndoSnip(pi: ExtensionAPI, state: ContextGuardState, ctx: ExtensionContext): void {
   const targets = state.activeSnipTargets();
   if (targets.length === 0) {
-    ctx.ui.notify("context-guard：没有可撤销的裁剪。", "info");
+    notify(ctx, "context-guard：没有可撤销的裁剪。", "info");
     return;
   }
   for (const entryId of targets) state.queueSnip(entryId, undefined, "restore");
   pi.appendEntry(PENDING_UNSNIP_ENTRY, { targetIds: targets, at: Date.now() });
-  ctx.ui.notify(
+  notify(ctx, 
     `context-guard：已排队恢复 ${targets.length} 条历史，将在下一次回合边界生效（原始记录从未离开会话文件）。`,
     "info",
   );
@@ -447,6 +466,21 @@ function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KiB`;
   return `${(bytes / (1024 * 1024)).toFixed(2)} MiB`;
+}
+
+/**
+ * 按设计共同约定 7：所有 UI 交互先看 `ctx.hasUI`。
+ *
+ * 非交互模式（print / json）没有 UI；显式守一道不是为了防崩，而是让"这里依赖渲染"
+ * 在代码里看得见——真实运行里 `ctx.ui` 的无操作实现会吞掉内容，静默通过很难被发现。
+ */
+function notify(
+  ctx: { hasUI: boolean; ui: { notify(message: string, kind?: "info" | "warning" | "error"): void } },
+  message: string,
+  kind?: "info" | "warning" | "error",
+): void {
+  if (!ctx.hasUI) return;
+  ctx.ui.notify(message, kind);
 }
 
 export default contextGuard;

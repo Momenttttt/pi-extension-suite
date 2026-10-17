@@ -170,8 +170,3 @@ export function truncateMemoryBody(body: string): TruncatedBody {
     ...(reason === undefined ? {} : { reason }),
   };
 }
-
-/** 记忆目录当前是否存在（read / list 用；write 不要求）。 */
-export function memoryDirExists(dir: string | undefined): boolean {
-  return dir !== undefined && existsSync(dir);
-}

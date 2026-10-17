@@ -44,22 +44,11 @@ export class ReadStateTable {
     this.entries.clear();
   }
 
-  /** 保留给定的键集合，其余丢弃（按保留尾部重建时用）。 */
-  retain(keys: ReadonlySet<string>): void {
-    for (const key of [...this.entries.keys()]) {
-      if (!keys.has(key)) this.entries.delete(key);
-    }
-  }
-
   /** 从另一个表整体替换内容（重建时用）。 */
   replaceAll(entries: Iterable<ReadStateEntry>): void {
     this.entries.clear();
     for (const entry of entries) this.entries.set(entry.key, entry);
     this.evict();
-  }
-
-  toArray(): ReadStateEntry[] {
-    return [...this.entries.values()];
   }
 
   private evict(): void {

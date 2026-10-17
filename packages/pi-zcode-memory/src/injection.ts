@@ -61,7 +61,7 @@ function hashOfMarkerData(data: unknown): string | undefined {
 /**
  * 从**当前上下文投影**的条目里重建"仍存活的注入 hash"。
  *
- * 传入的必须是 `buildSessionProjection()` 的条目（已按压缩保留尾部裁剪）：注入消息被摘要掉
+ * 传入的必须是 `buildSessionProjection()` 的条目（只包含压缩后的保留尾部）：注入消息被摘要掉
  * 之后投影里就没有它了，调用方据此重新注入。标记条目与注入消息成对出现，缺一即视为丢失。
  */
 export function rebuildInjectedHash(entries: readonly InjectionEntryLike[]): string | undefined {

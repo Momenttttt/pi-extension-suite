@@ -87,11 +87,33 @@ describe("空闲档", () => {
 });
 
 describe("体积档：/ctx compact 手动", () => {
+  test("正文没超过体积档阈值时不清（体积档的定义本身包含阈值）", async () => {
+    const cwd = workspace();
+    // 小文件：保留尾部之外的可清理正文远小于阈值
+    writeFileSync(join(cwd, "small.txt"), "tiny content\n", "utf8");
+    writeConfig(cwd, { keepRecent: 1, maxClearableBytes: 256 * 1024 });
+    const test = await sessionIn(cwd, [
+      { toolCall: { name: "read", arguments: { path: "small.txt" } } },
+      { toolCall: { name: "read", arguments: { path: "small.txt" } } },
+      { text: "ok" },
+      { text: "done" },
+    ]);
+
+    await test.run("read small.txt twice");
+    await test.run("/ctx compact");
+    await test.run("继续");
+
+    // 没越线 → 水位不动 → 请求里不该出现占位符
+    expect(containsPlaceholder(test.requests[3]!)).toBe(false);
+    expect(clearedToolCallIds(test.requests[3]!)).toHaveLength(0);
+  });
+
   test("命令立刻清理，之后请求变小且相邻请求集合一致", async () => {
     const cwd = workspace();
     // 单个 read 结果就有约 50 KiB 正文，便于量"请求变小"
     writeLargeText(join(cwd, "big.txt"));
-    writeConfig(cwd, { keepRecent: 1, gapThresholdMinutes: 60 });
+    // 体积档的定义包含阈值，所以阈值必须低于待清的正文量（这里是 ~50 KiB）
+    writeConfig(cwd, { keepRecent: 1, gapThresholdMinutes: 60, maxClearableBytes: 8 * 1024 });
     const test = await sessionIn(cwd, [
       { toolCall: { name: "read", arguments: { path: "big.txt" } } },
       { toolCall: { name: "read", arguments: { path: "big.txt" } } },

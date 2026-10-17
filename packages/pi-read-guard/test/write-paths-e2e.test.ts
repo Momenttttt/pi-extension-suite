@@ -272,3 +272,57 @@ describe("票据 03：mtime 前进与内容等价逃逸", () => {
     expect(readFileSync(file, "utf8")).toBe("new content\n");
   });
 });
+
+describe("票据 03/04：同批次并行工具调用不互相误判", () => {
+  test("同一批次的两个 edit 作用在不同文件：都放行", async () => {
+    const cwd = workspace();
+    const a = join(cwd, "a.txt");
+    const b = join(cwd, "b.txt");
+    writeFileSync(a, "alpha original\n", "utf8");
+    writeFileSync(b, "beta original\n", "utf8");
+    const test = await sessionIn(cwd, [
+      { toolCall: { name: "read", arguments: { path: "a.txt" }, id: "call_a" } },
+      { toolCall: { name: "read", arguments: { path: "b.txt" }, id: "call_b" } },
+      { toolCall: { name: "edit", arguments: { path: "a.txt", edits: [{ oldText: "alpha", newText: "ALPHA" }] }, id: "call_a2" } },
+      { toolCall: { name: "edit", arguments: { path: "b.txt", edits: [{ oldText: "beta", newText: "BETA" }] }, id: "call_b2" } },
+      { text: "done" },
+    ]);
+
+    await test.run("read both, then edit both");
+    expect(readFileSync(a, "utf8")).toBe("ALPHA original\n");
+    expect(readFileSync(b, "utf8")).toBe("BETA original\n");
+    const last = test.requests[test.requests.length - 1];
+    expect(last?.allText).not.toContain("read-guard:");
+  });
+
+  test("同一批次里对同一文件先 read 再 edit：read 先落水位，edit 不误判", async () => {
+    const cwd = workspace();
+    const file = join(cwd, "a.txt");
+    writeFileSync(file, "original content\n", "utf8");
+    const test = await sessionIn(cwd, [
+      { toolCall: { name: "read", arguments: { path: "a.txt" }, id: "call_r" } },
+      { toolCall: { name: "edit", arguments: { path: "a.txt", edits: [{ oldText: "original", newText: "EDITED" }] }, id: "call_e" } },
+      { text: "done" },
+    ]);
+
+    await test.run("read then edit in one batch");
+    expect(readFileSync(file, "utf8")).toBe("EDITED content\n");
+    expect(test.requests[test.requests.length - 1]?.allText).not.toContain("read-guard:");
+  });
+
+  test("同一批次里对同一文件发两个 edit：第二个用第一个留下的水位，不要求重读", async () => {
+    const cwd = workspace();
+    const file = join(cwd, "a.txt");
+    writeFileSync(file, "one two three\n", "utf8");
+    const test = await sessionIn(cwd, [
+      { toolCall: { name: "read", arguments: { path: "a.txt" }, id: "call_r" } },
+      { toolCall: { name: "edit", arguments: { path: "a.txt", edits: [{ oldText: "one", newText: "ONE" }] }, id: "call_e1" } },
+      { toolCall: { name: "edit", arguments: { path: "a.txt", edits: [{ oldText: "two", newText: "TWO" }] }, id: "call_e2" } },
+      { text: "done" },
+    ]);
+
+    await test.run("read then two edits in one batch");
+    // edit 记的是新 mtime、不记 hash：只要没有外部改动，第二次同批 edit 不该被要求重读
+    expect(readFileSync(file, "utf8")).toBe("ONE TWO three\n");
+  });
+});

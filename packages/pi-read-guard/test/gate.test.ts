@@ -4,7 +4,6 @@ import {
   DEFAULT_WRITE_GATE_MESSAGES,
   decideWriteGate,
   displayPathOf,
-  extractToolPath,
   hashContent,
   normalizePathKey,
   type ReadStateEntry,
@@ -175,13 +174,6 @@ describe("decideWriteGate 判定表", () => {
 });
 
 describe("helm 小工具", () => {
-  test("extractToolPath 只认非空字符串 path", () => {
-    expect(extractToolPath({ path: "a.ts" })).toBe("a.ts");
-    expect(extractToolPath({ path: "" })).toBeUndefined();
-    expect(extractToolPath({})).toBeUndefined();
-    expect(extractToolPath(null)).toBeUndefined();
-  });
-
   test("displayPathOf 在 cwd 内给相对路径", () => {
     expect(displayPathOf("C:\\repo\\src\\a.ts", "C:\\repo")).toBe("src\\a.ts");
     expect(displayPathOf("D:\\other\\a.ts", "C:\\repo")).toBe("D:\\other\\a.ts");

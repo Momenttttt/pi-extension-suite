@@ -227,7 +227,49 @@ describe("票据 04：压缩后只有保留尾部内的读记录仍有效", () =
     await test.run("write old.txt after compaction");
 
     const last = test.requests[test.requests.length - 1];
-    expect(last?.allText).toContain("read-guard:");
+    // 收紧到具体 code：只断言"出现 read-guard:" 的话，三种判定都算过。
+    // 被摘要掉就等于"没读过"，所以这里必须是 not_read。
+    expect(last?.allText).toContain("read-guard: not_read");
     expect(readFileSync(oldFile, "utf8")).toBe("old content\n");
+  });
+
+  test("保留尾部里的读记录仍然有效：重读之后写入放行（不是一律要求重读）", async () => {
+    const cwd = workspace();
+    writeLargeFile(join(cwd, "big.txt"));
+    const tailFile = join(cwd, "tail.txt");
+    writeFileSync(tailFile, "tail content\n", "utf8");
+
+    const test = await sessionIn(
+      cwd,
+      [
+        { toolCall: { name: "read", arguments: { path: "tail.txt" } } },
+        { text: "one" },
+        // 大文件的读把 `tail.txt` 那条读记录远远推出保留尾部
+        { toolCall: { name: "read", arguments: { path: "big.txt" } } },
+        { text: "two" },
+      ],
+      { settings: COMPACTION_SETTINGS },
+    );
+    await test.run("read the small file");
+    await test.run("read the big file");
+
+    await test.session.compact();
+
+    test.pushResponses(
+      { toolCall: { name: "read", arguments: { path: "tail.txt" } } },
+      { text: "re-read it" },
+    );
+    await test.run("re-read the small file");
+
+    // 压缩后重新读过的记录必须是有效水位：写入放行，而不是被当成"没读过"
+    test.pushResponses(
+      { toolCall: { name: "write", arguments: { path: "tail.txt", content: "rewritten\n" } } },
+      { text: "done" },
+    );
+    await test.run("write the small file");
+
+    const last = test.requests[test.requests.length - 1];
+    expect(last?.allText).toContain("Successfully wrote to tail.txt");
+    expect(readFileSync(tailFile, "utf8")).toBe("rewritten\n");
   });
 });

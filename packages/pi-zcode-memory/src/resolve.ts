@@ -126,8 +126,3 @@ function listDirectoryNames(path: string): string[] {
     return [];
   }
 }
-
-/** 该目录下是否存在 `MEMORY.md`（存在才算"有索引可注入"）。 */
-export function hasMemoryIndex(dir: string): boolean {
-  return existsSync(join(dir, "MEMORY.md"));
-}

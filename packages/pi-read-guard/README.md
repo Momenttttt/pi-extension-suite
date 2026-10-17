@@ -28,7 +28,15 @@ pi -e ./packages/pi-read-guard/extensions/read-guard.ts
 | 只读过一段（`offset`/`limit`），文件之后没动 | 放行 |
 | 只读过一段，文件之后动了 | **阻断**（重读） |
 
-阻断理由会一并给出机器可读的 `code`（`not_read` / `truncated_read` / `modified_since_read`），便于别的扩展或脚本判断。
+阻断理由的**最后一行**是固定格式的代码行，便于别的扩展或脚本判断：
+
+```
+（read-guard: not_read）
+```
+
+三个代码：`not_read`（没读过）、`truncated_read`（读到的是截断内容）、`modified_since_read`（读后被改动）。
+pi 的 `tool_call` 结果只有 `{ block, reason, terminate }` 三个字段、没有结构化的 `details`，所以代码只能落在
+`reason` 文本里——它是这套契约里唯一能被下游读到的地方。
 
 ## 配置
 

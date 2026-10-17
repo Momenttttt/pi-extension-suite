@@ -157,10 +157,10 @@ const subagentLite: ExtensionFactory = (pi) => {
       canResolve: (provider, id) => ctx.modelRegistry.find(provider, id) !== undefined,
       ...(ctx.model ? { sessionModel: { provider: ctx.model.provider, id: ctx.model.id } } : {}),
     });
-    if (warning !== undefined) ctx.ui.notify(warning, current.conflicts.length > 0 ? "error" : "warning");
+    if (warning !== undefined) notify(ctx, warning, current.conflicts.length > 0 ? "error" : "warning");
     if (guardNeedsWarning(current.guard)) {
       // 降级要明说：不注入守卫时子代理不再受"先读后写"约束
-      ctx.ui.notify(describeGuardInjection(current.guard), "warning");
+      notify(ctx, describeGuardInjection(current.guard), "warning");
     }
   });
 
@@ -172,7 +172,7 @@ const subagentLite: ExtensionFactory = (pi) => {
     description: "列出 subagent-lite 生效的代理档案、被跳过的文件与冲突",
     handler: async (_args, ctx) => {
       const current = stateOf(ctx);
-      ctx.ui.notify(
+      notify(ctx, 
         formatAgentsReport({
           listing: current.listing,
           canResolve: (provider, id) => ctx.modelRegistry.find(provider, id) !== undefined,
@@ -519,6 +519,21 @@ function textOfAssistant(content: unknown): string {
     }
   }
   return text.trim();
+}
+
+/**
+ * 按设计共同约定 7：所有 UI 交互先看 `ctx.hasUI`。
+ *
+ * 非交互模式（print / json）没有 UI；显式守一道不是为了防崩，而是让"这里依赖渲染"
+ * 在代码里看得见——真实运行里 `ctx.ui` 的无操作实现会吞掉内容，静默通过很难被发现。
+ */
+function notify(
+  ctx: { hasUI: boolean; ui: { notify(message: string, kind?: "info" | "warning" | "error"): void } },
+  message: string,
+  kind?: "info" | "warning" | "error",
+): void {
+  if (!ctx.hasUI) return;
+  ctx.ui.notify(message, kind);
 }
 
 export default subagentLite;

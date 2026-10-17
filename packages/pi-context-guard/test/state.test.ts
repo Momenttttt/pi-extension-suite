@@ -94,13 +94,14 @@ describe("压缩联动", () => {
     expect(state.totalCount).toBe(4);
   });
 
-  test("连续失败累计；成功一次清零", () => {
+  test("连续失败累计；压缩成功之后清零", () => {
     const state = new ContextGuardState();
     state.recordFailure();
     state.recordFailure();
     state.recordFailure();
     expect(state.failures).toBe(3);
-    state.recordSuccess();
+    // 生产路径上"清零"只有一条：压缩成功（`onCompaction`）——没有单独的"成功"信号可用
+    state.onCompaction();
     expect(state.failures).toBe(0);
     expect(state.reliefPending).toBe(false);
   });

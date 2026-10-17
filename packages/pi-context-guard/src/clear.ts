@@ -39,8 +39,6 @@ export const MCP_TOOL_PREFIX = "mcp__";
 export const NEVER_CLEARABLE_TOOLS: ReadonlySet<string> = new Set(["codemode", "tool_search"]);
 
 /** `subagent` / `memory_read` 默认排除、可配置开启（设计 §2.4 的两条例外）。 */
-export const OPTIONAL_CLEARABLE_TOOLS = ["subagent", "memory_read"] as const;
-
 export interface ClearableToolOptions {
   /** 插件 04（subagent）的结果：默认 false——子代理报告是结论，不是原始输出。 */
   clearSubagentResults: boolean;

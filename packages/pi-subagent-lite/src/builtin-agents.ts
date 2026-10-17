@@ -16,8 +16,17 @@ export const EXPLORE_AGENT_NAME = "Explore";
 
 export const EXPLORE_AGENT: AgentProfile = {
   name: EXPLORE_AGENT_NAME,
+  // 这段描述是"何时该用它"的说明，按 CC 的结构重写、措辞自己来。
+  // 刻意与 CC 的 whenToUse 不同的一点：把"按`find`/`grep`定位，按行号给证据"写进描述，
+  // 因为模型挑代理时真正需要知道的是"它会给我什么形状的答案"。
   description:
-    'Fast read-only search agent for locating code. Use it to find files by naming convention (for example "packages/*/test/*.test.ts"), to grep for a symbol, string, or config key, or to answer "where is X defined / which files reference Y". Say how far to search: "quick" for one targeted lookup, "medium" for a few rounds, or "very thorough" to try every plausible location and naming convention. Do not use it for code review, cross-file consistency audits, or open-ended analysis: it reads excerpts, not whole files, and will miss content outside its read window. Use general-purpose instead when the task needs edits.',
+    "找代码用的只读代理：给它一个定位问题，它回来时给文件与行号。" +
+    "适合「哪些文件引用了 X」「这个配置键在哪定义」「这个约定在本仓库里长什么样」这类问题" +
+    "——尤其是答案可能散在多个目录、需要好几轮搜索才收敛的时候。" +
+    "委托时说清要搜多细：一次性定位、几轮试探、还是把可能的命名与目录都试一遍。" +
+    "它读的是片段而不是整个文件，所以别用它做代码审查、跨文件一致性核对，或需要通读全貌的分析；" +
+    "要改文件也请改用 general-purpose。",
+
   tools: ["read", "grep", "find", "ls", "bash"],
   disallowedTools: [],
   model: "inherit",
