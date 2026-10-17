@@ -87,6 +87,8 @@ enabled: true
 
 **用量回传给父会话（与 CC 相反）。** CC 对 one-shot 的内置 Explore/Plan 会抑制 usage trailer 省 token；pi 的会话合计依赖工具结果里的 `usage`，所以一律回传，账要准。
 
+**`details.truncated` 只管正文截断，`maxTurns` 到点停由 `status: "max_turns"` 表达。** 设计文档把"结果被截断"和"没跑完"合用一个布尔字段，这里拆开：一个布尔表达不了两件事，而 `status` 本来就能区分。
+
 **`turns` 是近似值。** 按 assistant 消息条数计数（实测 `message_end` 每条消息一次，次数与 `turn_end` 一致），不等于 CC 对"模型轮次"的定义；中途被中断时 pi 还会补一条空的 assistant 消息，所以中断场景下它会多算一条。`maxTurns` 只用于"到点就停"，宁可早停不跑飞。
 
 **`maxTurns` 默认不设。** 与 CC 的 Explore 一致：不控成本，跑到自然结束；跑飞时靠父级中断（Esc → `ctx.signal` → 子会话 `abort()`）兜底。

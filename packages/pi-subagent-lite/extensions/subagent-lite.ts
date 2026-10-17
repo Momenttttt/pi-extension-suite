@@ -12,11 +12,12 @@
  *   - `src/result.ts` / `src/usage.ts`  结果形状、摘要行、用量折算
  *   - 本文件                事件与工具接线、子会话装配
  *
- * 本文件里两处是"实测出来的契约"，改动前先看注释：
+ * 三处"实测出来的契约"，改动前先看注释：
  *   - `pi.getAllTools()` 在扩展加载期不可用（抛 "Extension runtime not initialized"），
  *     只能在 `session_start` 或工具/命令上下文里调
  *   - `createAgentSession` 若不传 `modelRuntime`，子会话会自己建一个——父会话里由扩展注册的
  *     provider 在子会话里**不存在**，`model: inherit` 会直接失败（详见 `parentModelRuntime`）
+ *   - 子会话的守卫注入路径不能只靠 `import.meta.resolve`（jiti 下会抛），详见 `src/guard.ts`
  */
 import { fileURLToPath } from "node:url";
 
@@ -196,13 +197,12 @@ const subagentLite: ExtensionFactory = (pi) => {
     ],
     parameters: SUBAGENT_PARAMS,
     execute: async (_toolCallId, params, signal, _onUpdate, ctx) => {
-      return runSubagent(pi, ctx, params, signal ?? ctx.signal);
+      return runSubagent(ctx, params, signal ?? ctx.signal);
     },
   });
 
   /** `subagent` 工具的全部逻辑。 */
   async function runSubagent(
-    api: typeof pi,
     ctx: ExtensionContext,
     params: SubagentParams,
     signal: AbortSignal | undefined,
@@ -307,6 +307,8 @@ const subagentLite: ExtensionFactory = (pi) => {
         toolCalls: stats.toolCalls,
         durationMs: Date.now() - started,
         usage: usageFromSessionStats(stats),
+        // 只表示正文被 100k 上限截断；maxTurns 到点停由 status 表达（设计文档把两者混用
+        // 同一个字段，这里拆开——合成一个布尔就把"结果被截断"和"没跑完"两件事糊住了）
         truncated: false,
         model: `${child.model?.provider ?? modelChoice.model?.provider ?? "?"}/${child.model?.id ?? modelChoice.model?.id ?? "?"}`,
       };
