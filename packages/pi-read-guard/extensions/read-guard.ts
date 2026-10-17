@@ -44,8 +44,11 @@ import { ReadStateTable } from "../src/state.ts";
 const readGuard: ExtensionFactory = (pi: ExtensionAPI): void => {
   const table = new ReadStateTable();
   let config: ReadGuardConfig | undefined;
+  /** 最近一次回调给出的会话 cwd，供事件总线的读态登记算路径键用。 */
+  let sessionCwd: string | undefined;
 
   const configOf = (ctx: ExtensionContext): ReadGuardConfig => {
+    sessionCwd = ctx.cwd;
     config ??= loadConfig(ctx.cwd);
     return config;
   };
@@ -87,8 +90,12 @@ const readGuard: ExtensionFactory = (pi: ExtensionAPI): void => {
   pi.events.on(READ_STATE_EVENT, (payload) => {
     const record = payload as ReadStateEventPayload | undefined;
     if (!record || typeof record.path !== "string" || typeof record.mtimeMs !== "number") return;
+    // 事件的载荷没有 cwd（发布方只有一个路径），但接收方总会先经过至少一次带 ctx 的回调
+    // （`session_start` 最迟在第一次工具调用前必然跑到），所以用记下来的会话 cwd 算键，
+    // 而不是 `process.cwd()`——后者在宿主从别处启动 pi 时是错的。
+    const cwd = sessionCwd ?? process.cwd();
     table.set({
-      key: normalizePathKey(record.path, { cwd: process.cwd() }),
+      key: normalizePathKey(record.path, { cwd }),
       absolutePath: record.path,
       mtimeMs: record.mtimeMs,
       sizeBytes: typeof record.sizeBytes === "number" ? record.sizeBytes : 0,
