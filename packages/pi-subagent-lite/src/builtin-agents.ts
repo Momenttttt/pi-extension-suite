@@ -1,8 +1,7 @@
 /**
  * 两个内置代理（最低优先级的一层）。
  *
- * 结构照 Claude Code / ZCode 的同名代理，**文案自己写**（参照家源码无许可证，不逐字搬运）。
- * 与 CC 的一处有意偏离：不写死模型（ADR-0003），`model: inherit` 跟随会话模型。
+ * 都不写死模型（ADR-0003）：`model: inherit` 跟随会话模型。
  *
  * 只读是提示词级的约定（ADR-0006）：Explore 保留完整 bash，工具池里没有 edit/write，
  * 但那不是沙箱——Explore 的 system prompt 里的两段禁令是唯一屏障。
@@ -16,16 +15,19 @@ export const EXPLORE_AGENT_NAME = "Explore";
 
 export const EXPLORE_AGENT: AgentProfile = {
   name: EXPLORE_AGENT_NAME,
-  // 这段描述是"何时该用它"的说明，按 CC 的结构重写、措辞自己来。
-  // 刻意与 CC 的 whenToUse 不同的一点：把"按`find`/`grep`定位，按行号给证据"写进描述，
-  // 因为模型挑代理时真正需要知道的是"它会给我什么形状的答案"。
+  // 这段描述是"何时该用它"的说明，模型靠它挑代理。
+  // 刻意把"按 `find`/`grep` 定位、按行号给证据"写进描述，因为模型挑代理时
+  // 真正需要知道的是"它会给我什么形状的答案"。
   description:
-    "找代码用的只读代理：给它一个定位问题，它回来时给文件与行号。" +
-    "适合「哪些文件引用了 X」「这个配置键在哪定义」「这个约定在本仓库里长什么样」这类问题" +
-    "——尤其是答案可能散在多个目录、需要好几轮搜索才收敛的时候。" +
-    "委托时说清要搜多细：一次性定位、几轮试探、还是把可能的命名与目录都试一遍。" +
-    "它读的是片段而不是整个文件，所以别用它做代码审查、跨文件一致性核对，或需要通读全貌的分析；" +
-    "要改文件也请改用 general-purpose。",
+    "Read-only agent for finding code: give it a locating question and it comes back with " +
+    "file paths and line numbers. Built for questions like \"which files reference X\", " +
+    "\"where is this config key defined\", or \"what does this convention look like in this " +
+    "repository\" — especially when the answer may be spread across several directories and " +
+    "need multiple rounds of searching to converge. When delegating, say how thoroughly to " +
+    "search: a single lookup, a few rounds of probing, or trying every plausible naming " +
+    "convention and directory. It reads snippets rather than whole files, so do not use it " +
+    "for code review, cross-file consistency checks, or analysis that requires reading " +
+    "everything end to end; use general-purpose when files need to change.",
 
   tools: ["read", "grep", "find", "ls", "bash"],
   disallowedTools: [],

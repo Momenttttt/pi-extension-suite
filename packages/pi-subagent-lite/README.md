@@ -77,23 +77,23 @@ enabled: true
 
 ## 设计取舍
 
-**Explore 的只读是提示词级的约定，不是强制。** `Explore` 保留完整 `bash`，工具池里只是没有 `edit` / `write`；只读语义由它系统提示词里那两段禁令承担（允许的只读命令类别 + 明确禁止的类别 + "拿不准就先报告"）。这一点与 Claude Code、ZCode、pi 官方示例、社区插件以及本机既有的 `Explore.md` 全部一致；用命令策略去"硬化"它是一条可被怪写法绕过的假沙箱，还会让"Explore 能做什么"变成本项目独有语义。README 与提示词都不暗示有强制只读：模型若无视提示词，仍可能写出文件。
+**Explore 的只读是提示词级的约定，不是沙箱。** `Explore` 保留完整 `bash`，工具池里只是没有 `edit` / `write`；只读语义由它系统提示词里那两段禁令承担（允许的只读命令类别 + 明确禁止的类别 + "拿不准就先报告"）。用命令策略去"硬化"它是一条可被怪写法绕过的假沙箱，还会让"Explore 能做什么"变成本项目独有语义。README 与提示词都不暗示有强制只读：模型若无视提示词，仍可能写出文件。
 
-**两个内置代理都跟随会话模型（`model: inherit`），这是有意偏离 Claude Code。** CC 的 Explore 对非 ant 用户固定 `haiku`，我们一律取父会话当前模型——好处是能力与成本口径一致、切换模型时子代理跟着切，代价是 Explore 类广搜比用 haiku 贵。需要省钱就在档案里给单个代理写 `model: provider/id`，`/agents` 会显示每个代理解析出的实际模型，避免"以为用的是便宜模型"。
+**两个内置代理都跟随会话模型（`model: inherit`），不写死模型。** 好处是能力与成本口径一致、切换模型时子代理跟着切；代价是 Explore 类广搜的账单跟着会话模型走，可能比固定用一个便宜模型贵。需要省钱就在档案里给单个代理写 `model: provider/id`，`/agents` 会显示每个代理解析出的实际模型，避免"以为用的是便宜模型"。
 
-**同名档案整份替换，不做字段合并。** 想只改内置 Explore 的模型，就得把它的定义整份抄下来改——这是可接受的成本，换来的是一份代理定义永远自洽（不会出现半新半旧的字段）。四家既有实现（CC / ZCode / pi 官方示例 / 社区插件）无一例外，pi 自己的资源覆盖也是整文件语义。
+**同名档案整份替换，不做字段合并。** 想只改内置 Explore 的模型，就得把它的定义整份抄下来改——这是可接受的成本，换来的是一份代理定义永远自洽（不会出现半新半旧的字段）。pi 自己的资源覆盖也是整文件语义。
 
-**子代理会话不落盘。** CC 写 `subagents/agent-<id>.jsonl`、ZCode 有子会话持久化，动机都是支撑 resume/续聊；本插件不需要 resume，于是不写盘——不占磁盘，也不把子代理读过的敏感内容落到盘上。将来的 resume 要重新评估这个决定。
+**子代理会话不落盘。** 落盘的动机通常是支撑 resume/续聊；本插件不需要 resume，于是不写盘——不占磁盘，也不把子代理读过的敏感内容落到盘上。将来的 resume 要重新评估这个决定。
 
-**用量回传给父会话（与 CC 相反）。** CC 对 one-shot 的内置 Explore/Plan 会抑制 usage trailer 省 token；pi 的会话合计依赖工具结果里的 `usage`，所以一律回传，账要准。
+**用量回传给父会话。** pi 的会话合计依赖工具结果里的 `usage`，所以一律回传，账要准。
 
 **`details.truncated` 只管正文截断，`maxTurns` 到点停由 `status: "max_turns"` 表达。** 设计文档把"结果被截断"和"没跑完"合用一个布尔字段，这里拆开：一个布尔表达不了两件事，而 `status` 本来就能区分。
 
-**`turns` 是近似值。** 按 assistant 消息条数计数（实测 `message_end` 每条消息一次，次数与 `turn_end` 一致），不等于 CC 对"模型轮次"的定义；中途被中断时 pi 还会补一条空的 assistant 消息，所以中断场景下它会多算一条。`maxTurns` 只用于"到点就停"，宁可早停不跑飞。
+**`turns` 是近似值。** 按 assistant 消息条数计数（实测 `message_end` 每条消息一次，次数与 `turn_end` 一致），不是"模型轮次"的严格口径；中途被中断时 pi 还会补一条空的 assistant 消息，所以中断场景下它会多算一条。`maxTurns` 只用于"到点就停"，宁可早停不跑飞。
 
-**`maxTurns` 默认不设。** 与 CC 的 Explore 一致：不控成本，跑到自然结束；跑飞时靠父级中断（Esc → `ctx.signal` → 子会话 `abort()`）兜底。
+**`maxTurns` 默认不设。** 不控成本，跑到自然结束；跑飞时靠父级中断（Esc → `ctx.signal` → 子会话 `abort()`）兜底。
 
-**子代理默认也受"先读后写"约束，但读态表是空的。** 子会话默认注入 `pi-read-guard`（自动按包名解析，`guardExtensionPaths` 可指定或关闭），子代理必须自己读一遍才能改——与 CC 的普通子代理、ZCode 的子 Runtime 一致，代价是少量额外 token。解析不到守卫时**不中断**子代理：只把注入关掉、明确告警，`/agents` 里也显示"未注入"。
+**子代理默认也受"先读后写"约束，但读态表是空的。** 子会话默认注入 `pi-read-guard`（自动按包名解析，`guardExtensionPaths` 可指定或关闭），子代理必须自己读一遍才能改——读态表不继承父会话，代价是少量额外 token。解析不到守卫时**不中断**子代理：只把注入关掉、明确告警，`/agents` 里也显示"未注入"。
 
 **守卫路径的解析实测偏离了设计文档。** 设计写的是 `import.meta.resolve("@momenttttt/pi-read-guard")`，但 pi 用 jiti 加载扩展（模块被转成 `data:` URL），在那里 `import.meta.resolve` 会抛 `Invalid relative URL or base scheme is not hierarchical`；而且包名本身也没有 `main`/`exports`，解析出来的不是扩展文件。实现改成：优先 `import.meta.resolve`，抛了就退回 `createRequire(import.meta.url).resolve`，先解析 `<包>/package.json`、再按它的 `pi.extensions` 清单拼出扩展文件路径（两条路都实测过）。
 
@@ -105,8 +105,8 @@ enabled: true
 - **子会话的隔离靠 `noExtensions: true`。** 它同时也让子代理结构上不可能再派子代理。副作用是子代理拿不到扩展工具——除了守卫这一条（`additionalExtensionPaths` 在 `noExtensions: true` 下依然生效，实测过）。
 - **子代理只拿到 `prompt` + 自己的系统提示词**，不继承父会话历史（不做 fork、没有上下文继承开关；v1 也不做后台执行与完成通知）。
 - **同一条助手消息里并行的多个 `general-purpose` 子代理可能互相踩文件**（它们都能写）。Explore 只读，并行安全。v1 不强制串行，只在提示词与档案里提示。
-- **结果体积上限 100k 字节**（UTF-8，`truncateHead`，超出时正文里注明），与 CC 的 `maxResultSizeChars` 同量级。
-- **后台执行、技能预加载、worktree 隔离、每代理持久记忆**都不做（对齐 CC/ZCode 的内置代理默认行为；后台执行列 v2）。
+- **结果体积上限 100k 字节**（UTF-8，`truncateHead`，超出时正文里注明）。
+- **后台执行、技能预加载、worktree 隔离、每代理持久记忆**都不做（后台执行列 v2）。
 
 ## 开发
 

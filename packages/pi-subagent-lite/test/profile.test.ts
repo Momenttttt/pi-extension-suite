@@ -143,7 +143,7 @@ describe("旧字段名兼容（不静默）", () => {
     expect(parsed.warnings.join("\n")).toContain("display_name");
   });
 
-  test("本机现有的 Explore.md（tintinweb 方言）能直接加载", () => {
+  test("用旧字段名的 Explore.md 能直接加载", () => {
     const parsed = parseAgentProfile(
       [
         "---",

@@ -59,10 +59,10 @@ export interface FailedProfile {
 export type ProfileParseResult = ParsedProfile | FailedProfile;
 
 /**
- * 旧字段名兼容表（tintinweb 方言 → 本插件名）。
+ * 旧字段名兼容表（旧档案的字段名 → 本插件名）。
  *
- * 用户本机已有 `~/.pi/agent/agents/Explore.md`，用的是 `display_name` / `prompt_mode`；
- * 换插件后不该静默失效，所以读到旧名一律给一条警告。
+ * 用户本机可能已有 `~/.pi/agent/agents/Explore.md`，用的是 `display_name` / `prompt_mode`；
+ * 不能让它静默失效，所以读到旧名一律给一条警告。
  */
 export const PROFILE_ALIASES: Readonly<Record<string, string>> = {
   display_name: "name",

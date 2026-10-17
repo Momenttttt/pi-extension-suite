@@ -60,7 +60,7 @@ describe("既有 read-guard 时的互通", () => {
     expect(readFileSync(memoryFile, "utf8")).toContain("新正文");
     // 工具结果里没有 read-guard 的阻断文案
     expect(session.requests[2]?.allText ?? "").not.toContain("read-guard:");
-    expect(session.requests[2]?.allText ?? "").not.toContain("尚未在本会话中读取");
+    expect(session.requests[2]?.allText ?? "").not.toContain("has not been read in this session");
   });
 
   test("截断读之后 edit → 被 read-guard 拦住（截断读不是写水位）", async () => {
@@ -93,7 +93,7 @@ describe("既有 read-guard 时的互通", () => {
     sessions.push(session);
 
     await session.run("读超长记忆后直接改它");
-    expect(session.requests[2]?.allText ?? "").toContain("read-guard:");
+    expect(session.requests[2]?.allText ?? "").toContain("read-guard: truncated_read");
     expect(readFileSync(memoryFile, "utf8")).toContain("第 0 行");
   });
 });

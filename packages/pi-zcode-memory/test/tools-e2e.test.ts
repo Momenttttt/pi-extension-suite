@@ -3,8 +3,8 @@
  *
  * 两个方向都验：
  *   - 读：对一个"ZCode 已写过记忆"的目录，memory_list / memory_read 的模型可见输出与磁盘一致
- *   - 写：memory_write 落盘后，文件按 ZCode `recall/manifest.ts` 规则可回读；
- *     MEMORY.md 的 revision 前进（ZCode 的 stale_write 自愈路径得以前进）
+ *   - 写：memory_write 落盘后，事实文件按回读规则可解析（首行 `---`、30 行内闭合、YAML 是映射）；
+ *     MEMORY.md 的 revision 前进（另一侧下一次写读到新 revision 后自己继续）
  */
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -71,8 +71,8 @@ describe("memory_list / memory_read（读取 ZCode 写下的记忆）", () => {
     const onDisk = readFileSync(join(workspace.memDir, "build-quirk.md"), "utf8");
     expect(readResult).toContain("**Why:** 生成物不在仓库里。");
     expect(onDisk).toContain("**How to apply:** 改 schema 后先 pnpm codegen。");
-    expect(readResult).toContain("name：build-quirk");
-    expect(readResult).toContain("type：project");
+    expect(readResult).toContain("name: build-quirk");
+    expect(readResult).toContain("type: project");
   });
 
   test("坏 frontmatter 的条目降级显示、不崩", async () => {
@@ -84,7 +84,7 @@ describe("memory_list / memory_read（读取 ZCode 写下的记忆）", () => {
     ]);
     await session.run("列一下记忆");
     expect(session.requests[1]?.allText).toContain("broken.md");
-    expect(session.requests[1]?.allText).toContain("frontmatter 无法解析");
+    expect(session.requests[1]?.allText).toContain("frontmatter cannot be parsed");
   });
 
   test("找不到记忆时工具报错、模型能看到原因", async () => {
@@ -94,7 +94,7 @@ describe("memory_list / memory_read（读取 ZCode 写下的记忆）", () => {
       { text: "not found" },
     ]);
     await session.run("读一条不存在的记忆");
-    expect(session.requests[1]?.allText).toContain("找不到");
+    expect(session.requests[1]?.allText).toContain('No memory "no-such-memory"');
     expect(session.requests[1]?.allText).toContain("memory_list");
   });
 });
@@ -119,7 +119,7 @@ describe("memory_write（写入后 ZCode 可回读）", () => {
     ]);
     await session.run("记住我偏好 REST");
     expect(session.requests).toHaveLength(2);
-    expect(session.requests[1]?.allText).toContain("已新建记忆 user-api-preference.md");
+    expect(session.requests[1]?.allText).toContain("Created memory user-api-preference.md");
 
     const text = readFileSync(join(workspace.memDir, "user-api-preference.md"), "utf8");
     const lines = text.replace(/\r\n/gu, "\n").split("\n");
@@ -176,9 +176,9 @@ describe("memory_write（写入后 ZCode 可回读）", () => {
     expect(readFileSync(join(workspace.memDir, "build-quirk.md"), "utf8")).toContain("第二版正文");
   });
 
-  test("已有索引被外部改动后写入：revision 前进，重读后能继续加行（ZCode 自愈路径）", async () => {
+  test("已有索引被外部改动后写入：revision 前进，重读后能继续加行", async () => {
     const workspace = createMemoryWorkspace();
-    // 模拟"ZCode 会话开着"：先有索引与被它读过的 revision
+    // 模拟"另一侧的会话开着"：先有索引与被它读过的 revision
     writeFileSync(join(workspace.memDir, "MEMORY.md"), "- [old](old.md) — 旧\n", "utf8");
     const revisionSeenByZcode = await revisionOf(join(workspace.memDir, "MEMORY.md"));
 
@@ -196,7 +196,7 @@ describe("memory_write（写入后 ZCode 可回读）", () => {
     const revisionNow = await revisionOf(join(workspace.memDir, "MEMORY.md"));
     expect(revisionNow?.id).not.toBe(revisionSeenByZcode?.id);
 
-    // ZCode 拿到 stale_write 后重读索引再写：我们的行还在，没有被整份盖掉
+    // 它重读索引后再写：我们的行还在，没有被整份盖掉
     const reRead = readFileSync(join(workspace.memDir, "MEMORY.md"), "utf8");
     const afterZcodeRewrite = upsertMemoryIndexLine(reRead, {
       filename: "zcode-added.md",

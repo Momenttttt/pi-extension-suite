@@ -6,7 +6,7 @@
  * 只测 `findForeignSubagentTools` 的返回值不足以证明它真的会说出口。
  *
  * 同一份通知里还应当带上"用户级 Explore.md 覆盖了内置代理"与旧字段名兼容的告警，
- * 因为本机确实存在这样一个文件（用 tintinweb 风格的 `display_name` / `prompt_mode`）。
+ * 因为用户本机可能就放着这样一份档案（用 `display_name` / `prompt_mode` 这类旧字段名）。
  */
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -29,7 +29,7 @@ afterEach(() => {
   else process.env.PI_CODING_AGENT_DIR = originalAgentDirEnv;
 });
 
-/** 模拟 `@tintinweb/pi-subagents`：它用的是 `Agent` 这个名字。 */
+/** 模拟另一个子代理扩展：它用的是 `Agent` 这个名字。 */
 const competitor: ExtensionFactory = (pi) => {
   pi.registerTool({
     name: "Agent",

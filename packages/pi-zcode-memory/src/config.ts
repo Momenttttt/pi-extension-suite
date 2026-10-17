@@ -9,8 +9,8 @@ import { join } from "node:path";
 export interface ZcodeMemoryConfig {
   enabled: boolean;
   /**
-   * 显式指定记忆目录（最高优先级）。ZCode 用了 workspace identity、或工作区路径写法
-   * 与 ZCode 不一致时，这是唯一可靠的兜底。
+   * 显式指定记忆目录（最高优先级）。路径算法对不上时（工作区标识、工作区路径写法差异），
+   * 这是唯一可靠的兜底。
    */
   dir: string | undefined;
   /** 是否做索引注入。默认开。

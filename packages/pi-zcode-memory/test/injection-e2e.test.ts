@@ -46,28 +46,28 @@ describe("索引注入", () => {
 
     await session.run("第一轮");
     const first = session.requests[0]?.allText ?? "";
-    expect(first).toContain("跨会话自动记忆索引");
+    expect(first).toContain("cross-session automatic memory index");
     expect(first).toContain("INDEX-ALPHA");
     expect(first).toContain(workspace.memDir);
 
     await session.run("第二轮");
     const second = session.requests[1]?.allText ?? "";
     expect(countOccurrences(second, "INDEX-ALPHA")).toBe(1);
-    expect(countOccurrences(second, "跨会话自动记忆索引")).toBe(1);
+    expect(countOccurrences(second, "cross-session automatic memory index")).toBe(1);
 
     // 索引变了 → 下一轮重新注入新内容
     writeIndex(workspace, "- [beta](beta.md) — INDEX-BETA 钩子\n");
     await session.run("第三轮");
     const third = session.requests[2]?.allText ?? "";
     expect(countOccurrences(third, "INDEX-BETA")).toBe(1);
-    expect(countOccurrences(third, "跨会话自动记忆索引")).toBe(2);
+    expect(countOccurrences(third, "cross-session automatic memory index")).toBe(2);
   });
 
   test("索引不存在时不注入（不制造空记忆上下文）", async () => {
     const workspace = createMemoryWorkspace();
     const session = await sessionIn(workspace, [{ text: "ok" }]);
     await session.run("随便说点什么");
-    expect(session.requests[0]?.allText ?? "").not.toContain("跨会话自动记忆索引");
+    expect(session.requests[0]?.allText ?? "").not.toContain("cross-session automatic memory index");
   });
 
   test("resume 后按当前分支重建标记：不重复注入", async () => {
@@ -90,7 +90,7 @@ describe("索引注入", () => {
     sessions.push(resumed);
     await resumed.run("第二轮");
     expect(countOccurrences(resumed.requests[0]?.allText ?? "", "INDEX-ALPHA")).toBe(1);
-    expect(countOccurrences(resumed.requests[0]?.allText ?? "", "跨会话自动记忆索引")).toBe(1);
+    expect(countOccurrences(resumed.requests[0]?.allText ?? "", "cross-session automatic memory index")).toBe(1);
   });
 
   test("超长索引按 200 行截断并带着 WARNING 一起注入", async () => {
@@ -101,14 +101,14 @@ describe("索引注入", () => {
     await session.run("读索引");
     const first = session.requests[0]?.allText ?? "";
     expect(first).toContain("WARNING");
-    expect(first).toContain("注入上限");
+    expect(first).toContain("injection limit");
     expect(first).not.toContain("- [m259]");
     expect(first).toContain("- [m199]");
   });
 
   test("索引里的 frontmatter 与顶层注释不会进上下文", async () => {
     const workspace = createMemoryWorkspace();
-    // 与 ZCode 的剥离顺序一致：先剥开头 frontmatter，再剥顶层注释
+    // 剥离顺序：先剥开头 frontmatter，再剥顶层注释
     writeIndex(workspace, "---\ntitle: stray\n---\n<!-- 内部说明 -->\n- [a](a.md) — 可见钩子\n");
     const session = await sessionIn(workspace, [{ text: "ok" }]);
     await session.run("读索引");
@@ -128,6 +128,6 @@ describe("索引注入", () => {
     );
     const session = await sessionIn(workspace, [{ text: "ok" }]);
     await session.run("说点什么");
-    expect(session.requests[0]?.allText ?? "").not.toContain("跨会话自动记忆索引");
+    expect(session.requests[0]?.allText ?? "").not.toContain("cross-session automatic memory index");
   });
 });

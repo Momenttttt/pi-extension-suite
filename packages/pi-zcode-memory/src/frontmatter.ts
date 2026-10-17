@@ -1,20 +1,23 @@
 /**
  * 事实文件 frontmatter 的解析与生成。
  *
- * 解析规则对齐 ZCode `memory/recall/manifest.ts` 的 `parseMemoryFrontmatter`：
- *   - 只在前 30 行里找 frontmatter（ZCode 的 manifest 预览就是 30 行）
+ * 解析规则：
+ *   - 只在前 30 行里找 frontmatter：扫描窗口必须有界，否则一个没有 frontmatter 的文件要被
+ *     整份读进来才能判定（列表扫描对每个文件都做一次这件事）；定成 30 是因为读这些文件的
+ *     一侧也只看这么多——闭合行更靠后的文件在两边都算"无描述条目"
  *   - 首行必须是 `---`，闭合行必须是单独的 `---`
  *   - YAML 解析失败或结果不是映射 → 视为"无描述条目"，不抛错
  *   - `type` 取 `metadata.type`，退回顶层 `type`；只认四个枚举值
  *
- * 生成规则对齐设计 §2.2：只写 `name` / `description` / `metadata.node_type` / `metadata.type`，
- * **不写** `originSessionId`（那是 ZCode 自己补的惰性字段），也不加自定义键。
+ * 生成规则（设计 §2.2）：只写 `name` / `description` / `metadata.node_type` / `metadata.type`，
+ * **不写** `originSessionId`：那是读文件的一方在缺失时自己补的惰性字段，我们不伪造不属于
+ * 自己的会话 id；也不加自定义键（未知键行为未核实）。
  */
 import { parse as parseYaml } from "yaml";
 
 import { MEMORY_TYPES, type MemoryType } from "./paths.ts";
 
-/** ZCode manifest 预览只读 30 行，frontmatter 必须在这之内闭合。 */
+/** 扫描窗口：frontmatter 必须在前 30 行内闭合。 */
 export const FRONTMATTER_SCAN_LINES = 30;
 
 export interface MemoryFrontmatter {
@@ -31,7 +34,7 @@ export interface MemoryDocument {
   body: string;
 }
 
-/** 统一 BOM 与行尾：ZCode 在解析与读取时都这么归一化。 */
+/** 统一 BOM 与行尾：解析与读取共用这一条归一化，后面按行处理都只面对 `\n`。 */
 export function normalizeMemoryText(content: string): string {
   return content.replace(/^\uFEFF/u, "").replace(/\r\n/gu, "\n");
 }

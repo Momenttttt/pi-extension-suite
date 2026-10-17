@@ -265,7 +265,7 @@ describe("中断传播", () => {
     // turns 是"assistant 消息条数"的近似：中途 abort 时 pi 还会补一条空的 assistant 消息
     expect(result?.details["turns"]).toBeGreaterThanOrEqual(1);
     expect(result?.details["usage"]).toMatchObject({ totalTokens: expect.any(Number) });
-    expect(result?.text).toContain("（子代理被中断，没有产出最终文本）");
+    expect(result?.text).toContain("(subagent was interrupted before producing final text)");
     expect(result?.text).toMatch(/\[subagent\] agent=general-purpose status=aborted/);
   });
 });
@@ -300,7 +300,7 @@ describe("模型与代理名", () => {
 
     const [result] = toolResults(test);
     expect(result?.details["model"]).toBe("pi-suite-stub/stub-model");
-    expect(result?.text).toContain("nope/missing 在 modelRegistry 里找不到");
+    expect(result?.text).toContain("nope/missing was not found in the modelRegistry");
     expect(result?.details["status"]).toBe("completed");
   });
 
@@ -320,7 +320,7 @@ describe("模型与代理名", () => {
 
     const [result] = toolResults(test);
     expect(result?.isError).toBe(true);
-    expect(result?.text).toContain("没有名为 nope 的代理档案");
+    expect(result?.text).toContain("No agent profile named nope");
     expect(result?.text).toContain("Explore");
     expect(result?.text).toContain("general-purpose");
   });
@@ -645,7 +645,7 @@ describe("守卫注入", () => {
     const child = childRequests(test, WRITE_PARENT_PROMPT, WRITE_CHILD_PROMPT);
     expect(child).toHaveLength(2);
     const childText = child.at(-1)?.allText ?? "";
-    expect(childText).toContain("尚未在本会话中读取过");
+    expect(childText).toContain("has not been read in this session");
     expect(childText).toContain("read-guard: not_read");
 
     // 文件没被改：阻断真的生效了

@@ -1,7 +1,7 @@
 /**
  * S1：memory_write 的落盘（frontmatter、原子写、索引行维护、revision 重试）。
  *
- * 另含 ZCode `recall/manifest.ts` 规则的回读校验：首行 `---`、30 行内闭合、YAML 可映射。
+ * 另含事实文件的回读校验：首行 `---`、30 行内闭合、YAML 可映射。
  */
 import { mkdtempSync, readFileSync, readdirSync, rmSync, statSync, symlinkSync, utimesSync, writeFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
@@ -47,7 +47,7 @@ async function writeSample(root: string, overrides: Partial<Parameters<typeof wr
   });
 }
 
-/** ZCode `recall/manifest.ts` 的回读规则：首行 ---、30 行内闭合、YAML 是映射。 */
+/** 事实文件的回读规则：首行 ---、30 行内闭合、YAML 是映射。 */
 function assertZcodeManifestCompatible(text: string): void {
   const normalized = text.replace(/^\uFEFF/u, "").replace(/\r\n/gu, "\n");
   const lines = normalized.split("\n");
@@ -155,7 +155,7 @@ describe("writeMemory", () => {
     expect(readFileSync(target, "utf8")).toBe("real");
   });
 
-  test("写入后 ZCode 的 revision 发生变化（它的 stale_write 自愈路径得以前进）", async () => {
+  test("写入后 revision 发生变化（另一侧下一次写读到新 revision 后自己继续）", async () => {
     const root = memoryDir();
     await writeSample(root);
     const before = await revisionOf(join(root, INDEX_FILENAME));
@@ -224,7 +224,7 @@ describe("索引行维护", () => {
     expect(() => readFileSync(join(root, INDEX_FILENAME), "utf8")).toThrow();
   });
 
-  test("revisionIdFromStat 与 ZCode 同构（截断毫秒）", () => {
+  test("revisionIdFromStat 截断毫秒", () => {
     expect(revisionIdFromStat({ mtimeMs: 1234.98, size: 7 })).toBe("mtime:1234:size:7");
   });
 });

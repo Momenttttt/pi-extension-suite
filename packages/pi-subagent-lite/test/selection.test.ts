@@ -147,8 +147,8 @@ describe("结果形状", () => {
   });
 
   test("没有产出时正文给明确的一句话，而不是空白", () => {
-    const content = composeResultContent({ text: "  ", details, emptyText: "（子代理没有产出文本）" });
-    expect(content.startsWith("（子代理没有产出文本）")).toBe(true);
+    const content = composeResultContent({ text: "  ", details });
+    expect(content.startsWith("(subagent produced no text)")).toBe(true);
   });
 });
 
@@ -173,7 +173,7 @@ describe("同类扩展冲突检测", () => {
   test("别人注册的 Agent / Task，以及别人替换掉的 subagent 都算冲突", () => {
     const found = findForeignSubagentTools(
       [
-        { name: "Agent", sourceInfo: { path: "C:/Users/me/.pi/agent/npm/node_modules/@tintinweb/pi-subagents/dist/index.js" } },
+        { name: "Agent", sourceInfo: { path: "C:/Users/me/.pi/agent/npm/node_modules/other-subagents/dist/index.js" } },
         { name: "Task", sourceInfo: { path: "D:/other/task-extension.ts" } },
         { name: "subagent", sourceInfo: { path: "D:/other/subagents/index.ts" } },
         { name: "read", sourceInfo: { path: "builtin:read" } },

@@ -28,7 +28,7 @@ export interface SubagentDetails {
   error?: string;
 }
 
-/** 结果体积上限：与 CC 的 `maxResultSizeChars`（100k 字符）同量级。 */
+/** 结果体积上限：100k 字节（UTF-8）。 */
 export const MAX_RESULT_BYTES = 100_000;
 
 /** `37200` → `37.2s`；不足 1s 保留毫秒。 */
@@ -68,7 +68,7 @@ export interface ComposeContentOptions {
 /** 组装 `content`：正文 + 明说出来的提示 + 最后一行摘要。 */
 export function composeResultContent(options: ComposeContentOptions): string {
   const body = options.text.trim();
-  const lines: string[] = [body === "" ? (options.emptyText ?? "（子代理没有产出文本）") : body];
+  const lines: string[] = [body === "" ? (options.emptyText ?? "(subagent produced no text)") : body];
   for (const note of options.notes ?? []) lines.push("", note);
   if (options.truncationNote !== undefined) lines.push("", options.truncationNote);
   lines.push("", formatTrailer(options.details));

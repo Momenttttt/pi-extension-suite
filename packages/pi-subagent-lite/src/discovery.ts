@@ -45,7 +45,7 @@ export interface LoadAgentListingOptions {
  * 项目级代理目录，**最近者在前**。
  *
  * 从 cwd 向上：含 `.pi/` 或 `.agents/` 的目录才算项目根候选；遇到 `.git` 就停（说明这一段
- * 属于同一个仓库）。与 CC 的 `cwd → git root` 走法一致。
+ * 属于同一个仓库），即走到 git 根为止。
  */
 export function projectAgentDirs(cwd: string): string[] {
   const found: string[] = [];

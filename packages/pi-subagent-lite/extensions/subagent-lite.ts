@@ -209,19 +209,22 @@ const subagentLite: ExtensionFactory = (pi) => {
   ) {
     const current = stateOf(ctx);
     if (!current.config.enabled) {
-      return errorResult("subagent-lite 已在配置里关闭（enabled: false）。");
+      return errorResult("subagent-lite is disabled by configuration (enabled: false).");
     }
 
     const requested = (params.subagent_type ?? DEFAULT_AGENT_NAME).trim();
     const profile = findProfile(current.listing, requested);
     if (profile === undefined) {
-      const names = current.listing.agents.map((agent) => agent.name).join("、");
-      return errorResult(`没有名为 ${requested} 的代理档案。可用：${names}（/agents 看详情）。`);
+      const names = current.listing.agents.map((agent) => agent.name).join(", ");
+      return errorResult(
+        `No agent profile named ${requested}. Available: ${names} (see /agents for details).`,
+      );
     }
 
     if (params.model !== undefined && isMalformedModelSpec(params.model)) {
       return errorResult(
-        `model 参数 "${params.model}" 无法解析：只接受 "provider/model" 形式或 "inherit"。`,
+        `The model parameter "${params.model}" cannot be parsed: ` +
+          'expected "provider/model" or "inherit".',
       );
     }
 
@@ -233,15 +236,18 @@ const subagentLite: ExtensionFactory = (pi) => {
 
     const thinking = resolveThinking(profile.thinking, ctx.thinkingLevel);
     if (thinking.inheritedButUnknown) {
-      notes.push("[subagent] 会话没有 thinking 档位信息，thinking 走 pi 的默认值。");
+      notes.push(
+        "[subagent] The session reports no thinking level; thinking follows pi's default.",
+      );
     }
 
     const modelRuntime = parentModelRuntime(ctx);
     if (modelRuntime === undefined) {
       // 不静默降级：父会话里由扩展注册的 provider 在自建 runtime 的子会话里不存在
       notes.push(
-        "[subagent] 拿不到父会话的 model runtime，子会话将自建一个：" +
-          "由扩展注册的 provider 在子代理里可能不可用（models.json 里的 provider 不受影响）。",
+        "[subagent] The parent session's model runtime is unavailable, so the child session " +
+          "creates its own: providers registered by extensions may be unavailable in the " +
+          "subagent (providers from models.json are unaffected).",
       );
     }
 
@@ -264,7 +270,7 @@ const subagentLite: ExtensionFactory = (pi) => {
       });
       child = created.session;
       if (created.modelFallbackMessage !== undefined) {
-        notes.push(`[subagent] pi 报告模型回退：${created.modelFallbackMessage}`);
+        notes.push(`[subagent] pi reported a model fallback: ${created.modelFallbackMessage}`);
       }
 
       // 计数：实测 `message_end` 每条消息都发一次，`role === "assistant"` 即一条模型消息，
@@ -410,7 +416,10 @@ function resolveModel(
   const spec = parseModelSpec(override ?? profile.model);
   if (spec.kind === "inherit") {
     if (ctx.model === undefined) {
-      return { model: undefined, error: "父会话当前没有模型，无法派子代理。" };
+      return {
+        model: undefined,
+        error: "The parent session has no current model, so no subagent can be dispatched.",
+      };
     }
     return { model: ctx.model };
   }
@@ -420,8 +429,9 @@ function resolveModel(
   return {
     model: ctx.model,
     note:
-      `[subagent] 档案指定的模型 ${spec.provider}/${spec.id} 在 modelRegistry 里找不到，` +
-      `已回退到会话模型 ${ctx.model?.provider ?? "?"}/${ctx.model?.id ?? "?"}。`,
+      `[subagent] The profile's model ${spec.provider}/${spec.id} was not found in the ` +
+      `modelRegistry; falling back to the session model ${ctx.model?.provider ?? "?"}/` +
+      `${ctx.model?.id ?? "?"}.`,
   };
 }
 
@@ -442,11 +452,11 @@ function statusOf(error: string | undefined, abortReason: "parent" | "turns" | u
 
 function emptyTextFor(details: SubagentDetails, error: string | undefined): string {
   if (details.status === "max_turns") {
-    return `（子代理达到 maxTurns 上限被中断，没有产出最终文本）`;
+    return "(subagent hit the maxTurns limit and was interrupted before producing final text)";
   }
-  if (details.status === "aborted") return "（子代理被中断，没有产出最终文本）";
-  if (details.status === "error") return `（子代理运行失败：${error ?? "未知原因"}）`;
-  return "（子代理没有产出文本）";
+  if (details.status === "aborted") return "(subagent was interrupted before producing final text)";
+  if (details.status === "error") return `(subagent failed: ${error ?? "unknown reason"})`;
+  return "(subagent produced no text)";
 }
 
 /** 截断 + 组装 content。超过 100k 字节用 `truncateHead`，并在正文里注明。 */
@@ -467,8 +477,8 @@ function buildResult(options: {
     });
     body = truncated.content;
     truncationNote =
-      `[subagent] 结果已截断：正文 ${truncated.totalBytes} 字节超过 ${MAX_RESULT_BYTES} 字节上限，` +
-      "只保留开头部分。";
+      `[subagent] Result truncated: the body is ${truncated.totalBytes} bytes, over the ` +
+      `${MAX_RESULT_BYTES}-byte limit; only the beginning is kept.`;
     details.truncated = true;
   }
 

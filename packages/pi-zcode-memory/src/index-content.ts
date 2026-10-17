@@ -1,13 +1,11 @@
 /**
  * 注入用的索引格式化。
  *
- * 对齐 ZCode `memory/index-content.ts` 的 `formatProjectMemoryIndexContent`：
  *   - 剥掉开头 frontmatter、剥掉顶层 HTML 注释、trim
  *   - 截断上限 200 行 / 25 000 字符，超限追加一条 WARNING
  *
- * 唯一实现差异：ZCode 用 `marked` 的 lexer 判定"顶层 HTML comment token"；本包不引入
- * markdown 解析器，改用逐行扫描（代码围栏外、行首以 `<!--` 开头的注释块），列表项与
- * 段落里的注释保持原样。行为对"索引顶部的注释"这一实际用法一致。
+ * 不引入 markdown 解析器：逐行扫描就够——代码围栏外、行首以 `<!--` 开头的注释块整块剥掉，
+ * 列表项与段落里的注释保持原样（真会出现在索引顶部的注释只有这一种用法）。
  */
 import { createHash } from "node:crypto";
 
@@ -87,9 +85,9 @@ export function truncateMemoryIndex(content: string): FormattedMemoryIndex {
     truncated = truncated.slice(0, lastNewline > 0 ? lastNewline : INDEX_CHARACTER_LIMIT);
   }
   const warning =
-    `> WARNING: MEMORY.md 索引过长（共 ${lineCount} 行 / ${characterCount} 字符，注入上限 ` +
-    `${INDEX_LINE_LIMIT} 行 / ${INDEX_CHARACTER_LIMIT} 字符），上面只注入了截断后的部分。` +
-    `请把索引行压短、把细节移进事实文件。`;
+    `> WARNING: the MEMORY.md index is too long (${lineCount} lines / ${characterCount} characters; ` +
+    `the injection limit is ${INDEX_LINE_LIMIT} lines / ${INDEX_CHARACTER_LIMIT} characters), so only the truncated part above was injected. ` +
+    `Shorten the index lines and move details into the fact files.`;
   return {
     text: `${truncated}\n\n${warning}`,
     truncated: true,

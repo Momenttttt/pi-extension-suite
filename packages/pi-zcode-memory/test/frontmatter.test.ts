@@ -1,8 +1,7 @@
 /**
  * S1：事实文件 frontmatter 的解析容错与生成。
  *
- * 解析规则对齐 ZCode `memory/recall/manifest.ts`：首行 `---`、30 行内闭合、YAML 可映射，
- * 坏输入一律降级为"无描述条目"而不抛错。
+ * 解析规则：首行 `---`、30 行内闭合、YAML 可映射，坏输入一律降级为"无描述条目"而不抛错。
  */
 import { describe, expect, test } from "vitest";
 import { parse as parseYaml } from "yaml";
@@ -40,7 +39,7 @@ describe("parseMemoryFrontmatter", () => {
     expect(parseMemoryFrontmatter(bad).type).toBeUndefined();
   });
 
-  test("ZCode 写过的文件（含 originSessionId）照常解析", () => {
+  test("带 originSessionId 的文件照常解析", () => {
     const zcode = [
       "---",
       "name: build-quirk",
@@ -66,7 +65,7 @@ describe("parseMemoryFrontmatter", () => {
     expect(parseMemoryFrontmatter(["---", "name: a", "---"].join("\n")).malformed).toBe(false);
   });
 
-  test("闭合行超过 30 行时按 manifest 规则视为无 frontmatter", () => {
+  test("闭合行超过 30 行时视为无 frontmatter", () => {
     const lines = ["---", "description: 藏在很后面"];
     for (let index = 0; index < 40; index += 1) lines.push(`填充 ${index}`);
     lines.push("---");
@@ -108,7 +107,7 @@ describe("renderMemoryFile", () => {
     expect(text.endsWith("\n")).toBe(true);
   });
 
-  test("往返：生成的文档能被 ZCode 的 YAML 规则解析回原值", () => {
+  test("往返：生成的文档能被 YAML 解析回原值", () => {
     const input = {
       name: "weird-description",
       description: '带冒号: 引号 " 和 # 的值',

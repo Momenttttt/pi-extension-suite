@@ -1,8 +1,12 @@
 /**
  * 扩展入口：让 pi 与 ZCode 共用同一份项目记忆。
  *
+ * 互通是这个包存在的理由，也是唯一一条外部约束：目录布局、索引格式、事实文件 frontmatter
+ * 必须与 ZCode 读写的那一套一致，因为那些文件由它创建、也由它召回。除此之外本包不依赖它，
+ * 代码里也不复述它的内部实现。
+ *
  * 分层（越靠下越纯，纯层不 import pi，便于 S1 单测）：
- *   - `src/paths.ts`        目录算法（ZCode 复刻）
+ *   - `src/paths.ts`        目录算法
  *   - `src/resolve.ts`      三级回退
  *   - `src/config.ts`       全局 + 项目配置深合并
  *   - `src/frontmatter.ts`  事实文件 frontmatter 解析与生成
@@ -12,7 +16,7 @@
  *   - 本文件               事件与工具接线
  *
  * 并发：所有写入都走 pi 的 `withFileMutationQueue(root, ...)` 串行；跨进程的部分不做锁，
- * 靠写前 revision 比对 + 重读重试（与 ZCode 前台写的策略一致）。
+ * 靠写前 revision 比对 + 重读重试自愈——**不**静默覆盖别人的改动。
  */
 import { readFile } from "node:fs/promises";
 import { isAbsolute, join, resolve } from "node:path";
@@ -94,10 +98,10 @@ const zcodeMemory: ExtensionFactory = (pi: ExtensionAPI): void => {
     name: "memory_list",
     label: "Memory List",
     description:
-      "列出与 ZCode 共用的项目记忆目录里的事实文件（文件名 / name / description / type / 修改时间）。" +
-      "记忆是长期事实，不是待办清单；要看正文用 memory_read，要写新事实用 memory_write。" +
-      "这个列表来自磁盘文件，不依赖 MEMORY.md 索引是否完好。",
-    promptSnippet: "列出与 ZCode 共用的项目记忆（长期事实）",
+      "List the fact files in the project memory directory shared with ZCode (filename / name / description / type / modified time). " +
+      "Memories are long-term facts, not a to-do list; use memory_read to see a body and memory_write to store a new fact. " +
+      "This list comes from the files on disk, so it does not depend on the MEMORY.md index being intact.",
+    promptSnippet: "List project memories shared with ZCode (long-term facts)",
     parameters: Type.Object({}),
     exposure: "direct",
     async execute(_toolCallId, _params, _signal, _onUpdate, ctx) {
@@ -109,7 +113,8 @@ const zcodeMemory: ExtensionFactory = (pi: ExtensionAPI): void => {
 
   const memoryReadParams = Type.Object({
     name: Type.String({
-      description: "记忆的 name（frontmatter 里的 name）或文件名，例如 user-api-preference 或 user-api-preference.md；也支持子目录下的文件名。",
+      description:
+        "The memory's name (the name in its frontmatter) or its filename, for example user-api-preference or user-api-preference.md; filenames in subdirectories work too.",
     }),
   });
 
@@ -117,10 +122,10 @@ const zcodeMemory: ExtensionFactory = (pi: ExtensionAPI): void => {
     name: "memory_read",
     label: "Memory Read",
     description:
-      "读取一条项目记忆的 frontmatter 摘要与正文。参数是记忆的 name 或文件名。" +
-      "正文超过 200 行或 4096 字节时按 ZCode 召回的上限截断，并提示去哪里读全文——" +
-      "也就是说，这里看到的就是会话里实际可用的量。",
-    promptSnippet: "读取一条项目记忆的正文",
+      "Read one project memory's frontmatter summary and body. The parameter is the memory's name or filename. " +
+      "A body longer than 200 lines or 4096 bytes is truncated at the same limit ZCode uses when it recalls a memory, " +
+      "and the result says where to read the full text — so what you see here is what is actually usable in a session.",
+    promptSnippet: "Read the body of one project memory",
     parameters: memoryReadParams,
     exposure: "direct",
     async execute(_toolCallId, params: Static<typeof memoryReadParams>, _signal, _onUpdate, ctx) {
@@ -136,7 +141,7 @@ const zcodeMemory: ExtensionFactory = (pi: ExtensionAPI): void => {
       const located = locateMemory(dir, params.name);
       if (!located.ok) {
         return {
-          content: [{ type: "text", text: `读取记忆失败：${located.error.message}` }],
+          content: [{ type: "text", text: `Failed to read memory: ${located.error.message}` }],
           details: { dir, code: located.error.code } satisfies MemoryToolDetails,
           isError: true,
         };
@@ -171,23 +176,25 @@ const zcodeMemory: ExtensionFactory = (pi: ExtensionAPI): void => {
   const memoryWriteParams = Type.Object({
     name: Type.String({
       description:
-        "记忆的名字，同时用作文件名（不带 .md 也行），惯例是 kebab-case 的 3–4 个词，例如 user-api-preference。",
+        "The memory's name, also used as its filename (.md optional); by convention a kebab-case slug of 3-4 words, for example user-api-preference.",
     }),
     description: Type.String({
-      description: "一句话描述这条记忆是什么；会写进 frontmatter 和 MEMORY.md 的索引行，也是 ZCode 召回时判断相关性的依据。",
+      description:
+        "One sentence describing what this memory is; it goes into the frontmatter and the MEMORY.md index line, and it is what ZCode uses to judge relevance when recalling memories.",
     }),
     type: Type.Union(
       MEMORY_TYPES.map((value) => Type.Literal(value)),
       {
         description:
-          "user（用户是谁）/ feedback（用户给过的工作方式反馈）/ project（进行中的项目事实）/ reference（外部资源位置）。",
+          "user (who the user is) / feedback (working-style feedback the user gave) / project (ongoing project facts) / reference (where an external resource lives).",
       },
     ),
     body: Type.String({
-      description: "记忆正文：一个文件一个事实。feedback / project 型按惯例写 **Why:** 与 **How to apply:**；相关记忆用 [[name]] 互链。",
+      description:
+        "The memory body: one fact per file. For feedback / project memories the convention is **Why:** and **How to apply:**; link related memories with [[name]].",
     }),
     mode: Type.Union([Type.Literal("create"), Type.Literal("upsert")], {
-      description: "create 遇到同名记忆报错；upsert 覆盖它并更新索引行。",
+      description: "create errors when a memory with that name exists; upsert overwrites it and updates the index line.",
     }),
   });
 
@@ -195,11 +202,11 @@ const zcodeMemory: ExtensionFactory = (pi: ExtensionAPI): void => {
     name: "memory_write",
     label: "Memory Write",
     description:
-      "把一条长期事实写进与 ZCode 共用的项目记忆目录，并维护 MEMORY.md 的索引行。" +
-      "记忆是长期事实（用户偏好、用户给过的工作方式反馈、项目约束、外部资源），**不是待办清单**、" +
-      "也不是会随对话结束的临时状态；仓库代码、git 历史或本次任务里已经能查到的信息不要写进来。" +
-      "写前先想清楚有没有已存在的记忆覆盖同一件事：有就 upsert 更新它，而不是建重复条目。",
-    promptSnippet: "把长期事实写进与 ZCode 共用的项目记忆（非待办）",
+      "Write one long-term fact into the project memory directory shared with ZCode, and maintain its MEMORY.md index line. " +
+      "Memories are long-term facts (user preferences, working-style feedback the user gave, project constraints, external resources), **not a to-do list**, " +
+      "and not temporary state that ends with the conversation; do not write down information that the repository code, git history, or this task already answers. " +
+      "Before writing, work out whether an existing memory covers the same thing: if so, upsert it rather than creating a duplicate entry.",
+    promptSnippet: "Write a long-term fact into the project memory shared with ZCode (not a to-do)",
     parameters: memoryWriteParams,
     exposure: "direct",
     async execute(_toolCallId, params: Static<typeof memoryWriteParams>, _signal, _onUpdate, ctx) {
@@ -218,17 +225,21 @@ const zcodeMemory: ExtensionFactory = (pi: ExtensionAPI): void => {
             mode: params.mode,
           }),
         );
-        const action = outcome.fileAction === "created" ? "新建" : "覆盖更新";
+        const action = outcome.fileAction === "created" ? "Created" : "Overwrote";
         const indexAction =
-          outcome.indexAction === "inserted" ? "新增一行" : outcome.indexAction === "updated" ? "更新该行" : "无需改动";
+          outcome.indexAction === "inserted"
+            ? "index line added"
+            : outcome.indexAction === "updated"
+              ? "index line updated"
+              : "index line unchanged";
         return {
           content: [
             {
               type: "text",
               text:
-                `已${action}记忆 ${outcome.filename}；MEMORY.md 索引${indexAction}。\n` +
-                `记忆目录：${dir}\n` +
-                `ZCode 侧要等它重新读索引（新会话 / 冷恢复 / /clear）才能看到这次改动；这只是同步延迟，不是写入失败。`,
+                `${action} memory ${outcome.filename}; MEMORY.md ${indexAction}.\n` +
+                `Memory directory: ${dir}\n` +
+                `ZCode sees this change only after it re-reads the index (new session / cold resume / /clear); that is a sync delay, not a failed write.`,
             },
           ],
           details: {
@@ -241,7 +252,7 @@ const zcodeMemory: ExtensionFactory = (pi: ExtensionAPI): void => {
         if (error instanceof MemoryWriteError) {
           const hint = error.hint === undefined ? "" : `\n${error.hint}`;
           return {
-            content: [{ type: "text", text: `写入记忆失败：${error.message}${hint}` }],
+            content: [{ type: "text", text: `Failed to write memory: ${error.message}${hint}` }],
             details: { dir, code: error.code } satisfies MemoryToolDetails,
             isError: true,
           };
@@ -352,10 +363,10 @@ function detailsOf(resolution: MemoryDirResolution): MemoryToolDetails {
 }
 
 function noMemoryDirText(resolution: MemoryDirResolution): string {
-  const warnings = resolution.warnings.map((warning) => `\n注意：${warning}`).join("");
+  const warnings = resolution.warnings.map((warning) => `\nNote: ${warning}`).join("");
   return (
-    `该项目尚无 ZCode 记忆：按算法算出的目录不存在（${resolution.computedDir}）。` +
-    `memory_write 会创建它；如果 ZCode 侧确实已经写过记忆，用配置里的 dir 显式指定目录。` +
+    `This project has no ZCode memory yet: the computed directory does not exist (${resolution.computedDir}). ` +
+    `memory_write creates it; if ZCode really has written memories for this project, set dir in the config to point at that directory. ` +
     `${warnings}`
   );
 }
@@ -364,21 +375,21 @@ function formatMemoryListResult(resolution: MemoryDirResolution): string {
   const dir = resolution.dir;
   if (dir === undefined) return noMemoryDirText(resolution);
   const entries = listMemoryFiles(dir);
-  const warnings = resolution.warnings.map((warning) => `注意：${warning}`).join("\n");
-  const header = `记忆目录：${dir}\n事实文件：${entries.length} 个`;
+  const warnings = resolution.warnings.map((warning) => `Note: ${warning}`).join("\n");
+  const header = `Memory directory: ${dir}\nFact files: ${entries.length}`;
   const body =
     entries.length === 0
-      ? "（没有事实文件）"
+      ? "(no fact files)"
       : entries
           .map((entry) => {
             const mtime = new Date(entry.mtimeMs).toISOString();
             if (entry.malformed) {
-              return `- ${entry.filename}（frontmatter 无法解析：按 ZCode 规则视为无描述条目；修改时间 ${mtime}）`;
+              return `- ${entry.filename} (frontmatter cannot be parsed: treated as an entry with no description; modified ${mtime})`;
             }
             const type = entry.type === undefined ? "" : ` [${entry.type}]`;
             const description = entry.description === undefined ? "" : ` — ${entry.description}`;
             const name = entry.name === undefined ? "" : ` ${entry.name}`;
-            return `- ${entry.filename}${type}${name}${description}（修改时间 ${mtime}）`;
+            return `- ${entry.filename}${type}${name}${description} (modified ${mtime})`;
           })
           .join("\n");
   return warnings.length === 0 ? `${header}\n${body}` : `${warnings}\n${header}\n${body}`;
@@ -396,36 +407,38 @@ function formatMemoryReadResult(
 ): string {
   const frontmatter = memory.frontmatter;
   const lines: string[] = [];
-  lines.push(`文件：${memory.filename}`);
+  lines.push(`File: ${memory.filename}`);
   lines.push(
     frontmatter.malformed
-      ? "frontmatter：无法解析（按 ZCode manifest 规则视为无描述条目）"
-      : `name：${frontmatter.name ?? "（无）"}；description：${frontmatter.description ?? "（无描述）"}；type：${frontmatter.type ?? "（未标注）"}`,
+      ? "frontmatter: cannot be parsed (treated as an entry with no description)"
+      : `name: ${frontmatter.name ?? "(none)"}; description: ${frontmatter.description ?? "(no description)"}; type: ${frontmatter.type ?? "(not set)"}`,
   );
-  lines.push(`大小：${memory.sizeBytes} 字节；修改时间：${new Date(memory.mtimeMs).toISOString()}`);
+  lines.push(`Size: ${memory.sizeBytes} bytes; modified: ${new Date(memory.mtimeMs).toISOString()}`);
   lines.push("");
-  lines.push(truncated.text.length === 0 ? "（正文为空）" : truncated.text);
+  lines.push(truncated.text.length === 0 ? "(body is empty)" : truncated.text);
   if (truncated.truncated) {
     const why =
       truncated.reason === "lines"
-        ? "前 200 行"
+        ? "the first 200 lines"
         : truncated.reason === "bytes"
-          ? "4096 字节"
-          : "前 200 行 / 4096 字节";
+          ? "4096 bytes"
+          : "the first 200 lines / 4096 bytes";
     lines.push("");
-    lines.push(`（正文已截断：与 ZCode 召回一致，这里最多读取${why}。完整内容请用内置 read 工具读 ${memory.absolutePath}。）`);
+    lines.push(
+      `(body truncated: at most ${why} is read here, the same limit ZCode uses when recalling a memory. Use the built-in read tool to read the full content at ${memory.absolutePath}.)`,
+    );
   }
   return lines.join("\n");
 }
 
 function buildInjectionText(dir: string, indexText: string, truncated: boolean): string {
   const lines = [
-    "以下是你在这个项目里的跨会话自动记忆索引。它记录的是长期事实（用户是谁、给过的工作方式反馈、项目在做的事、外部资源位置），不是本轮任务的待办清单。",
+    "Below is the cross-session automatic memory index for this project. It records long-term facts (who the user is, working-style feedback they gave, what the project is doing, where external resources live), not a to-do list for this turn.",
     "",
-    `记忆目录：${dir}`,
-    `索引：${join(dir, INDEX_FILENAME)}（只有索引会出现在上下文里；正文按需用 memory_read 读，不要凭索引行臆断正文内容）`,
+    `Memory directory: ${dir}`,
+    `Index: ${join(dir, INDEX_FILENAME)} (only the index appears in context; read bodies on demand with memory_read, and do not infer a body's content from its index line)`,
   ];
-  if (truncated) lines.push("本次注入的索引是截断后的片段（见末尾 WARNING）。");
+  if (truncated) lines.push("The index injected this time is a truncated excerpt (see the WARNING at the end).");
   lines.push("", indexText);
   return lines.join("\n");
 }

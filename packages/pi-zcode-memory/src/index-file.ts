@@ -4,9 +4,9 @@
  * 索引由模型维护，我们只在 `memory_write` 时插入/更新对应的一行：
  *   `- [标题](file.md) — 一句话钩子`
  *
- * 写前比对 revision（`mtime:<截断毫秒>:size:<字节>`，与 ZCode `adapters/src/fs/index.ts:775`
- * 的 `revisionId` 同构）；不一致就重读重试一次，再失败报错让模型重试——**不**静默覆盖。
- * 这里不是跨进程锁，只是把"读-改-写"的窗口缩到最小：ZCode 的前台写同样没有跨进程锁。
+ * 写前比对 revision（`mtime:<截断毫秒>:size:<字节>`）；不一致就重读重试一次，再失败报错让
+ * 模型重试——**不**静默覆盖别人的改动。这里不是跨进程锁，只是把"读-改-写"的窗口缩到最小；
+ * 跨进程的并发靠 revision 前进被发现，下一次写读到新内容后自己继续。
  */
 import { readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
@@ -107,7 +107,7 @@ async function readIndexOrEmpty(path: string): Promise<string> {
     return await readFile(path, "utf8");
   } catch (error) {
     if (isNoEntryError(error)) return "";
-    throw new MemoryWriteError("io", `读取索引失败：${path}（${describe(error)}）`, "稍后重试。");
+    throw new MemoryWriteError("io", `Failed to read the index: ${path} (${describe(error)})`, "Retry later.");
   }
 }
 
@@ -142,14 +142,18 @@ export async function updateMemoryIndex(
       continue;
     }
     await atomicWriteFile(indexPath, result.content).catch((error: unknown) => {
-      throw new MemoryWriteError("io", `写入索引失败：${indexPath}（${describe(error)}）`, "稍后重试。");
+      throw new MemoryWriteError(
+        "io",
+        `Failed to write the index: ${indexPath} (${describe(error)})`,
+        "Retry later.",
+      );
     });
     return { indexPath, action: result.action };
   }
   throw new MemoryWriteError(
     "index_conflict",
-    `MEMORY.md 在你读取之后被其它进程改动了（${indexPath}）。为避免覆盖别人的改动，本次没有写入索引。`,
-    "重新读取记忆后重试本次写入。",
+    `MEMORY.md was changed by another process after you read it (${indexPath}). The index was not written this time, so someone else's changes are not overwritten.`,
+    "Re-read the memory and retry this write.",
   );
 }
 

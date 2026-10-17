@@ -1,7 +1,7 @@
 /**
- * ZCode 记忆目录的路径算法（纯函数，不 import pi）。
+ * 共享记忆目录的路径算法（纯函数，不 import pi）。
  *
- * 逐条复刻 ZCode 的 `getCliStorageRoot` 与 `resolveProjectMemoryRoot`：
+ * 规则：
  *   - 存储根：`<home>/.zcode`，basename 已是 `cli` 就不再追加
  *   - 项目目录：`memories/projects/<slug>-<hash16>/memory`
  *   - hash 输入：工作区标识（远程/托管工作区才有），否则 `resolve(cwd)`；**仅 win32** 折叠大小写
@@ -22,7 +22,7 @@ export const MEMORY_TYPES = ["user", "feedback", "project", "reference"] as cons
 export type MemoryType = (typeof MEMORY_TYPES)[number];
 
 export interface MemoryDirInput {
-  /** 工作目录；ZCode 侧传的是会话的工作区路径。 */
+  /** 工作目录（会话的工作区路径）。 */
   cwd: string;
   /** CLI 存储根：`<home>/.zcode/cli`。 */
   storageRoot: string;
@@ -49,13 +49,13 @@ export function pathImpl(platform: NodeJS.Platform | undefined) {
   return (platform ?? process.platform) === "win32" ? win32 : posix;
 }
 
-/** `getCliStorageRoot`：basename 已是 `cli` 就不追加。 */
+/** 存储根归一化：basename 已是 `cli` 就不再追加。 */
 export function ensureCliStorageRoot(storageRoot: string, platform?: NodeJS.Platform): string {
   const impl = pathImpl(platform);
   return impl.basename(storageRoot) === "cli" ? storageRoot : impl.join(storageRoot, "cli");
 }
 
-/** `<home>/.zcode` 之后再走 `getCliStorageRoot`。 */
+/** 由 home 推导存储根：`<home>/.zcode` 再归一化。 */
 export function resolveZcodeStorageRoot(homeDir: string, platform?: NodeJS.Platform): string {
   const impl = pathImpl(platform);
   return ensureCliStorageRoot(impl.join(homeDir, ".zcode"), platform);

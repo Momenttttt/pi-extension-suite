@@ -4,8 +4,8 @@
  * 顺序：校验 → 原子写事实文件 → 维护索引行。索引更新失败时不回滚事实文件——事实文件本身
  * 是完整可读的，索引行下一次写入会补上；反过来（索引指了不存在的文件）更糟。
  *
- * frontmatter 只写设计 §2.2 规定的键，**不写** `originSessionId`：ZCode 只在它缺失时自己补，
- * 我们不伪造 ZCode 的会话 id；也不加自定义键（未知键行为未核实）。
+ * frontmatter 只写设计 §2.2 规定的键，**不写** `originSessionId`：那是读文件的一方在缺失时
+ * 自己补的惰性字段，我们不伪造不属于自己的会话 id；也不加自定义键（未知键行为未核实）。
  */
 import { mkdir, lstat } from "node:fs/promises";
 import { join } from "node:path";
@@ -26,13 +26,17 @@ export function memoryFilenameFor(name: string): { filename: string; slug: strin
   const trimmed = name.trim();
   const slug = trimmed.toLowerCase().endsWith(".md") ? trimmed.slice(0, -3) : trimmed;
   if (slug.length === 0) {
-    throw new MemoryWriteError("invalid_name", "记忆的 name 不能为空。", "给一个 kebab-case 的短名字，例如 user-api-preference。");
+    throw new MemoryWriteError(
+      "invalid_name",
+      "Memory name must not be empty.",
+      "Use a short kebab-case name, for example user-api-preference.",
+    );
   }
   if (!MEMORY_NAME_PATTERN.test(slug)) {
     throw new MemoryWriteError(
       "invalid_name",
-      `name「${name}」不是合法的记忆文件名：只允许字母、数字、点、下划线和短横线，且不能以点或横线开头，不能包含路径分隔符。`,
-      "改用 kebab-case 的短名字，例如 user-api-preference。",
+      `name "${name}" is not a valid memory filename: only letters, digits, dots, underscores and hyphens are allowed; it cannot start with a dot or a hyphen, and it cannot contain path separators.`,
+      "Use a short kebab-case name, for example user-api-preference.",
     );
   }
   return { filename: `${slug}.md`, slug };
@@ -62,32 +66,40 @@ export async function writeMemory(input: WriteMemoryInput): Promise<WriteMemoryO
   if (description.length === 0) {
     throw new MemoryWriteError(
       "invalid_input",
-      "description 不能为空：它是索引行里的一句话钩子，也是 ZCode 召回时判断相关性的依据。",
-      "用一句话写清这条记忆是什么。",
+      "description must not be empty: it is the one-line hook in the index line, and what ZCode uses to judge relevance when recalling a memory.",
+      "Write one sentence saying what this memory is.",
     );
   }
   if (!input.body.trim()) {
     throw new MemoryWriteError(
       "invalid_input",
-      "body 不能为空：记忆文件要放进具体事实（正文里可直接用 [[其它记忆名]] 互链）。",
+      "body must not be empty: a memory file has to carry the concrete fact (the body may link other memories with [[other-memory-name]]).",
     );
   }
 
   // 目录按计算结果 mkdir -p（三级回退第 3 步：尚无记忆时写入才创建）
   await mkdir(input.root, { recursive: true }).catch((error: unknown) => {
-    throw new MemoryWriteError("io", `创建记忆目录失败：${input.root}（${describe(error)}）`, "检查目录权限后重试。");
+    throw new MemoryWriteError(
+      "io",
+      `Failed to create the memory directory: ${input.root} (${describe(error)})`,
+      "Check the directory permissions and retry.",
+    );
   });
 
   const absolutePath = join(input.root, filename);
   const existing = await lstatOrUndefined(absolutePath);
   if (existing?.isSymbolicLink()) {
-    throw new MemoryWriteError("symlink", `拒绝写入符号链接：${absolutePath}。`, "请传入真实文件路径。");
+    throw new MemoryWriteError(
+      "symlink",
+      `Refusing to write through a symbolic link: ${absolutePath}.`,
+      "Pass the real file path instead.",
+    );
   }
   if (input.mode === "create" && existing !== undefined) {
     throw new MemoryWriteError(
       "exists",
-      `记忆 ${filename} 已存在；create 模式不覆盖已有记忆。`,
-      "改用 mode: \"upsert\"，或换一个 name。",
+      `Memory ${filename} already exists; create mode does not overwrite an existing memory.`,
+      'Use mode: "upsert", or choose a different name.',
     );
   }
 
@@ -96,9 +108,13 @@ export async function writeMemory(input: WriteMemoryInput): Promise<WriteMemoryO
     await atomicWriteFile(absolutePath, content);
   } catch (error) {
     if (error instanceof SymlinkWriteRefusedError) {
-      throw new MemoryWriteError("symlink", error.message, "请传入真实文件路径。");
+      throw new MemoryWriteError("symlink", error.message, "Pass the real file path instead.");
     }
-    throw new MemoryWriteError("io", `写入记忆文件失败：${absolutePath}（${describe(error)}）`, "稍后重试。");
+    throw new MemoryWriteError(
+      "io",
+      `Failed to write the memory file: ${absolutePath} (${describe(error)})`,
+      "Retry later.",
+    );
   }
 
   let indexAction: WriteMemoryOutcome["indexAction"];
@@ -109,8 +125,8 @@ export async function writeMemory(input: WriteMemoryInput): Promise<WriteMemoryO
     if (error instanceof MemoryWriteError && error.code === "index_conflict") {
       throw new MemoryWriteError(
         "index_conflict",
-        `记忆文件已写入（${filename}），但 MEMORY.md 同时被其它进程改动，索引行没有更新。`,
-        "重新读取记忆后重试本条写入，把索引行补上。",
+        `The memory file was written (${filename}), but MEMORY.md was changed by another process at the same time, so its index line was not updated.`,
+        "Re-read the memory and retry this write so the index line gets added.",
       );
     }
     throw error;
@@ -137,7 +153,7 @@ async function lstatOrUndefined(path: string) {
     ) {
       return undefined;
     }
-    throw new MemoryWriteError("io", `检查目标文件失败：${path}（${describe(error)}）`);
+    throw new MemoryWriteError("io", `Failed to check the target file: ${path} (${describe(error)})`);
   }
 }
 

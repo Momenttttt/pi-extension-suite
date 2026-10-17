@@ -2,8 +2,8 @@
  * 用量折算：把子会话的 `getSessionStats()` 折成 pi 的工具结果 `usage`。纯层。
  *
  * 为什么要回传：pi 会把工具结果里的 `usage` 记进父会话的 `toolResult` 消息，`getSessionStats`
- * 再把它算进合计（`addUsageToTotals` 会读 `usage.cost.total`，缺 `cost` 直接抛）。**这里有意
- * 不同于 CC**——CC 对内置 Explore/Plan 会抑制 usage trailer 省 token，pi 的账要准，不能省。
+ * 再把它算进合计（`addUsageToTotals` 会读 `usage.cost.total`，缺 `cost` 直接抛）。**账要准，
+ * 不能省**：子代理的用量一律回传。
  */
 
 /** 与 pi-ai 的 `Usage` 结构对齐（pi 根不导出该类型，自己声明最小形状）。 */

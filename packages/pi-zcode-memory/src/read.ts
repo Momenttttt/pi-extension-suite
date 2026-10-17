@@ -3,8 +3,8 @@
  *
  * - 定位：按 frontmatter `name`、或按文件名（相对记忆目录，支持子目录）精确匹配；
  *   多处命中时报错而不是猜一个。
- * - 正文上限对齐 ZCode `memory/recall/content.ts`：先取前 200 行，再按 4096 字节截断到
- *   完整行的边界；任一超限都算截断。
+ * - 正文上限：先取前 200 行，再按 4096 字节截断到完整行的边界；任一超限都算截断。
+ *   这两个数就是一条记忆在会话里实际可用的量——读到上限的内容不该被当成全文。
  */
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { basename, isAbsolute, relative, resolve } from "node:path";
@@ -57,7 +57,7 @@ function isFile(path: string): boolean {
 export function locateMemory(root: string, reference: string): LocateResult {
   const ref = reference.trim().replace(/\\/gu, "/").replace(/^(?:\.\/)+/u, "");
   if (ref.length === 0) {
-    return { ok: false, error: { code: "not_found", message: "引用为空：请给记忆的 name 或文件名。" } };
+    return { ok: false, error: { code: "not_found", message: "The reference is empty: pass the memory's name or filename." } };
   }
 
   // 1) 直接当相对路径试：`foo.md`、`sub/foo.md`，以及（允许的）MEMORY.md
@@ -95,13 +95,16 @@ export function locateMemory(root: string, reference: string): LocateResult {
       ok: false,
       error: {
         code: "ambiguous",
-        message: `「${reference}」匹配到多条记忆，请改用文件名：${[...matches.keys()].join("、")}`,
+        message: `"${reference}" matches more than one memory; pass the filename instead: ${[...matches.keys()].join(", ")}`,
       },
     };
   }
   return {
     ok: false,
-    error: { code: "not_found", message: `记忆目录里找不到「${reference}」。先用 memory_list 看看有哪些记忆。` },
+    error: {
+      code: "not_found",
+      message: `No memory "${reference}" in the memory directory. Use memory_list first to see which memories exist.`,
+    },
   };
 }
 
@@ -116,7 +119,7 @@ function readLocated(root: string, absolutePath: string): LocateResult {
       ok: false,
       error: {
         code: "unreadable",
-        message: `读取失败：${absolutePath}（${error instanceof Error ? error.message : String(error)}）`,
+        message: `Read failed: ${absolutePath} (${error instanceof Error ? error.message : String(error)})`,
       },
     };
   }

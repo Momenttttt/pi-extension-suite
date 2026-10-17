@@ -1,8 +1,9 @@
 /**
- * 扫记忆目录里的"事实文件"（对齐 ZCode `memory/recall/manifest.ts` 的 `scanMemoryManifest`）。
+ * 扫记忆目录里的"事实文件"。
  *
- * 与 ZCode 的差异：manifest 用在模型召回里、上限 200 条；`memory_list` 是给人/模型看的工具，
- * 不设条数上限（一个项目的记忆文件本来就不多），但保持同样的候选判定与排序。
+ * 候选与排序都是对外承诺的一部分：递归扫 `.md`、排除索引自身；不递归进目录符号链接，
+ * 但指向文件的符号链接算候选；单个文件读不了只跳过它自己，不牵连其它条目；结果按 mtime
+ * 倒序（最近改动的排在前面）。不设条数上限——事实文件本来就不多，`memory_list` 给的是完整列表。
  */
 import { closeSync, openSync, readdirSync, readSync, statSync } from "node:fs";
 import { basename, join, relative, sep } from "node:path";
@@ -17,7 +18,7 @@ export interface MemoryListEntry {
   description?: string;
   type?: MemoryType;
   mtimeMs: number;
-  /** frontmatter 坏了（ZCode manifest 规则：记成"无描述条目"）。 */
+  /** frontmatter 坏了：记成"无描述条目"，不抛错。 */
   malformed: boolean;
 }
 
@@ -40,7 +41,7 @@ function collect(root: string, directory: string, out: MemoryListEntry[]): void 
   for (const dirent of dirents) {
     const path = join(directory, dirent.name);
     if (dirent.isDirectory()) {
-      // 不跟随目录符号链接：ZCode 的 listDirectory 把 symlink 单独归类，只有指向文件的才算候选。
+      // 不递归进目录符号链接；指向文件的链接在下面单独判。
       if (!dirent.isSymbolicLink()) collect(root, path, out);
       continue;
     }
@@ -71,7 +72,7 @@ function readEntry(root: string, path: string): MemoryListEntry | undefined {
     stat = statSync(path);
     head = readHead(path);
   } catch {
-    // 单个文件读不了不影响其它条目（对齐 ZCode 的 Promise.allSettled 语义）
+    // 单个文件读不了不影响其它条目
     return undefined;
   }
   const frontmatter = parseMemoryFrontmatter(head);

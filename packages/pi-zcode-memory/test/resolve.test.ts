@@ -67,7 +67,7 @@ describe("resolveMemoryDir", () => {
     expect(resolution.source).toBe("fallback");
     expect(resolution.dir).toBe(candidate);
     expect(resolution.computedDir).toBe(computedDir);
-    expect(resolution.warnings.join("\n")).toContain("hash 不同");
+    expect(resolution.warnings.join("\n")).toContain("Different hashes");
   });
 
   test("多个同 slug 候选 → 不猜，视为尚无记忆", () => {
@@ -78,7 +78,7 @@ describe("resolveMemoryDir", () => {
     const resolution = resolveMemoryDir({ cwd, storageRoot });
     expect(resolution.source).toBe("none");
     expect(resolution.dir).toBeUndefined();
-    expect(resolution.warnings.join("\n")).toContain("无法判定");
+    expect(resolution.warnings.join("\n")).toContain("no way to tell");
   });
 
   test("存在 project- 前缀目录 → 提示 workspace identity", () => {
@@ -94,7 +94,7 @@ describe("resolveMemoryDir", () => {
     const resolution = resolveMemoryDir({ cwd, storageRoot });
     expect(resolution.source).toBe("none");
     expect(resolution.dir).toBeUndefined();
-    expect(resolution.warnings.join("\n")).toContain("尚无 ZCode 记忆");
+    expect(resolution.warnings.join("\n")).toContain("no ZCode memory yet");
     // 不创建目录
     expect(() => writeFileSync(join(projectsRoot, "sentinel"), "")).toThrow();
   });
