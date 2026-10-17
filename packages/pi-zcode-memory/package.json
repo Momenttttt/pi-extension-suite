@@ -17,6 +17,7 @@
   },
   "files": [
     "extensions",
+    "src",
     "README.md",
     "LICENSE"
   ],
@@ -24,6 +25,9 @@
     "extensions": [
       "./extensions/zcode-memory.ts"
     ]
+  },
+  "dependencies": {
+    "yaml": "^2.9.1"
   },
   "peerDependencies": {
     "@earendil-works/pi-coding-agent": "*",
