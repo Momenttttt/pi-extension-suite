@@ -29,6 +29,8 @@ export interface AgentsReportInput {
   canResolve: (provider: string, id: string) => boolean;
   /** `session_start` 扫出来的同类扩展冲突（若有）。 */
   conflicts?: string[];
+  /** 子会话守卫注入状态（`describeGuardInjection` 的输出）。 */
+  guard?: string;
 }
 
 /** 把生效档案折算成报告行（真实模型、工具数、提示词模式、来源路径）。 */
@@ -101,6 +103,10 @@ export function formatAgentsReport(input: AgentsReportInput): string {
     for (const conflict of input.conflicts) lines.push(`- ${conflict}`);
   }
 
+  if (input.guard !== undefined) {
+    lines.push(input.guard);
+  }
+
   if (input.listing.scannedDirs.length > 0) {
     lines.push(`扫描的目录：${input.listing.scannedDirs.join("、")}`);
   } else {
@@ -121,6 +127,9 @@ export function startupWarning(input: AgentsReportInput): string | undefined {
   }
   for (const conflict of input.conflicts ?? []) {
     lines.push(conflict);
+  }
+  if (input.guard !== undefined && input.guard.includes("未注入")) {
+    lines.push(input.guard);
   }
   if (lines.length === 0) return undefined;
   return ["subagent-lite 启动提示：", ...lines].join("\n");

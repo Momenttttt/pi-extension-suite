@@ -8,7 +8,7 @@
  * （`test/fixtures/usage-tool.ts`，经 `guardExtensionPaths` 装进子会话）造非零用量，
  * 断言父会话合计真的把那笔账算进去了。
  */
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -596,5 +596,145 @@ describe("maxTurns", () => {
     expect(result?.details["status"]).toBe("completed");
     expect(result?.details["turns"]).toBe(3);
     expect(result?.text).toContain("child finished after two turns");
+  });
+});
+
+/**
+ * 守卫注入（票据 14 的后半段）：子代理默认也受"先读后写"约束。
+ *
+ * 注入路径经 `src/guard.ts` 解析（默认自动找 `@momenttttt/pi-read-guard`），失败只降级不中断。
+ */
+describe("守卫注入", () => {
+  const READ_GUARD_PATH = join(
+    dirname(fileURLToPath(import.meta.url)),
+    "..",
+    "..",
+    "pi-read-guard",
+    "extensions",
+    "read-guard.ts",
+  );
+
+  const WRITE_PARENT_PROMPT = "delegate a write task";
+  const WRITE_CHILD_PROMPT = "overwrite target.txt";
+
+  test("子代理未读就写 → 被 read-guard 阻断，理由出现在它的工具结果里", async () => {
+    const { test, cwd } = await sessionIn(
+      [
+        {
+          text: "delegating",
+          toolCall: {
+            name: "subagent",
+            arguments: {
+              description: "write without reading",
+              prompt: WRITE_CHILD_PROMPT,
+            },
+          },
+        },
+        { toolCall: { name: "write", arguments: { path: "target.txt", content: "OVERWRITTEN\n" } } },
+        { text: "child done" },
+        { text: "PARENT DONE" },
+      ],
+      { config: { guardExtensionPaths: [READ_GUARD_PATH] } },
+    );
+    writeFileSync(join(cwd, "target.txt"), "原始内容\n", "utf8");
+
+    await test.run(WRITE_PARENT_PROMPT);
+
+    // 子代理自己的工具结果里带着阻断理由（它是子会话第二次请求的一部分）
+    const child = childRequests(test, WRITE_PARENT_PROMPT, WRITE_CHILD_PROMPT);
+    expect(child).toHaveLength(2);
+    const childText = child.at(-1)?.allText ?? "";
+    expect(childText).toContain("尚未在本会话中读取过");
+    expect(childText).toContain("read-guard: not_read");
+
+    // 文件没被改：阻断真的生效了
+    expect(readFileSync(join(cwd, "target.txt"), "utf8")).toBe("原始内容\n");
+    // 子代理本身照常跑完
+    const [result] = toolResults(test);
+    expect(result?.details["status"]).toBe("completed");
+  });
+
+  test("子代理自己先读再写 → 放行", async () => {
+    const { test, cwd } = await sessionIn(
+      [
+        {
+          text: "delegating",
+          toolCall: {
+            name: "subagent",
+            arguments: { description: "read then write", prompt: WRITE_CHILD_PROMPT },
+          },
+        },
+        { toolCall: { name: "read", arguments: { path: "target.txt" } } },
+        { toolCall: { name: "write", arguments: { path: "target.txt", content: "OVERWRITTEN\n" } } },
+        { text: "child done" },
+        { text: "PARENT DONE" },
+      ],
+      { config: { guardExtensionPaths: [READ_GUARD_PATH] } },
+    );
+    writeFileSync(join(cwd, "target.txt"), "原始内容\n", "utf8");
+
+    await test.run(WRITE_PARENT_PROMPT);
+
+    expect(readFileSync(join(cwd, "target.txt"), "utf8")).toBe("OVERWRITTEN\n");
+    const child = childRequests(test, WRITE_PARENT_PROMPT, WRITE_CHILD_PROMPT);
+    expect(child.at(-1)?.allText).not.toContain("read-guard: not_read");
+  });
+
+  test("守卫路径解析不到 → 子代理照常跑 + 明确告警（不中断）", async () => {
+    const { test } = await sessionIn(
+      [
+        {
+          text: "delegating",
+          toolCall: {
+            name: "subagent",
+            arguments: { description: "still works", prompt: CHILD_PROMPT, subagent_type: "Explore" },
+          },
+        },
+        { text: "child ok" },
+        { text: "PARENT DONE" },
+      ],
+      { config: { guardExtensionPaths: [join("C:/definitely-missing", "read-guard.ts")] } },
+    );
+
+    const notifications: Array<{ message: string; type?: string }> = [];
+    await test.session.bindExtensions({
+      uiContext: {
+        notify: (message: string, type?: string) => {
+          notifications.push({ message, ...(type === undefined ? {} : { type }) });
+        },
+      } as never,
+    });
+
+    const reply = await test.run(PARENT_PROMPT);
+    expect(reply).toBe("PARENT DONE");
+
+    const [result] = toolResults(test);
+    expect(result?.details["status"]).toBe("completed");
+    const warnings = notifications.filter((entry) => entry.type === "warning");
+    expect(warnings.map((entry) => entry.message).join("\n")).toContain("读守卫注入：未注入");
+
+    const command = test.session.extensionRunner.getCommand("agents");
+    notifications.length = 0;
+    await command?.handler("", test.session.extensionRunner.createCommandContext());
+    expect(notifications.map((entry) => entry.message).join("\n")).toContain("读守卫注入：未注入");
+  });
+
+  test("默认（不写配置）时自动解析到 pi-read-guard，/agents 显示已注入", async () => {
+    const { test } = await sessionIn([{ text: "hi" }]);
+
+    const notifications: Array<{ message: string; type?: string }> = [];
+    await test.session.bindExtensions({
+      uiContext: {
+        notify: (message: string, type?: string) => {
+          notifications.push({ message, ...(type === undefined ? {} : { type }) });
+        },
+      } as never,
+    });
+    const command = test.session.extensionRunner.getCommand("agents");
+    await command?.handler("", test.session.extensionRunner.createCommandContext());
+
+    const report = notifications.map((entry) => entry.message).join("\n");
+    expect(report).toContain("读守卫注入：已注入");
+    expect(report).toContain("read-guard.ts");
   });
 });

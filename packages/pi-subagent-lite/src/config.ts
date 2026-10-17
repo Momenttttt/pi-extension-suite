@@ -9,12 +9,12 @@ import { join } from "node:path";
 export interface SubagentLiteConfig {
   enabled: boolean;
   /**
-   * 子会话额外加载的扩展路径（票据 14 的守卫注入入口）。
+   * 子会话额外加载的守卫扩展路径。
    *
-   * v1 只认显式给的路径：默认值（`import.meta.resolve("@momenttttt/pi-read-guard")`）与降级
-   * 告警留给票据 14。设为 `[]` 即关闭注入。
+   * **不写 = 自动解析** `@momenttttt/pi-read-guard`（解析不到就降级成不注入 + 告警，见 `guard.ts`）；
+   * 写 `[]` = 显式关闭；写路径列表 = 只用这些路径。
    */
-  guardExtensionPaths: string[];
+  guardExtensionPaths?: string[];
 }
 
 export interface RawSubagentLiteConfig {
@@ -24,7 +24,6 @@ export interface RawSubagentLiteConfig {
 
 export const DEFAULT_SUBAGENT_LITE_CONFIG: SubagentLiteConfig = {
   enabled: true,
-  guardExtensionPaths: [],
 };
 
 function readJsonIfExists(path: string): Record<string, unknown> {
@@ -57,11 +56,10 @@ export function deepMerge<T extends Record<string, unknown>>(
 
 /** 把外部 JSON 折算成可信配置；非法值一律退回默认值。 */
 export function parseSubagentLiteConfig(raw: unknown): SubagentLiteConfig {
-  if (!isPlainObject(raw)) {
-    return { ...DEFAULT_SUBAGENT_LITE_CONFIG, guardExtensionPaths: [] };
-  }
-  const config: SubagentLiteConfig = { ...DEFAULT_SUBAGENT_LITE_CONFIG, guardExtensionPaths: [] };
+  if (!isPlainObject(raw)) return { ...DEFAULT_SUBAGENT_LITE_CONFIG };
+  const config: SubagentLiteConfig = { ...DEFAULT_SUBAGENT_LITE_CONFIG };
   if (typeof raw.enabled === "boolean") config.enabled = raw.enabled;
+  // 只有真的写了这个键才覆盖"自动解析"的默认（写 [] 表示显式关闭）
   if (Array.isArray(raw.guardExtensionPaths)) {
     config.guardExtensionPaths = raw.guardExtensionPaths.filter(
       (value): value is string => typeof value === "string" && value.trim() !== "",

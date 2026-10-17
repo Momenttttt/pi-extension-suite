@@ -45,6 +45,12 @@ type SessionThinkingLevel = NonNullable<ExtensionContext["thinkingLevel"]>;
 import { DEFAULT_AGENT_NAME } from "../src/builtin-agents.ts";
 import { loadConfig, resolveAgentDir, type SubagentLiteConfig } from "../src/config.ts";
 import { loadAgentListing, type AgentListing } from "../src/discovery.ts";
+import {
+  describeGuardInjection,
+  guardNeedsWarning,
+  resolveGuardInjection,
+  type GuardInjection,
+} from "../src/guard.ts";
 import type { AgentProfile } from "../src/profile.ts";
 import { describeConflicts, findForeignSubagentTools } from "../src/registry.ts";
 import { formatAgentsReport, startupWarning } from "../src/report.ts";
@@ -93,6 +99,8 @@ interface SessionState {
   config: SubagentLiteConfig;
   listing: AgentListing;
   conflicts: string[];
+  /** 子会话要注入的扩展路径（票据 14：守卫）。 */
+  guard: GuardInjection;
   agentDir: string;
 }
 
@@ -121,6 +129,7 @@ const subagentLite: ExtensionFactory = (pi) => {
       config,
       listing,
       conflicts: config.enabled ? collectConflicts(pi) : [],
+      guard: resolveGuardInjection(config),
       agentDir,
     };
     return state;
@@ -148,6 +157,10 @@ const subagentLite: ExtensionFactory = (pi) => {
       ...(ctx.model ? { sessionModel: { provider: ctx.model.provider, id: ctx.model.id } } : {}),
     });
     if (warning !== undefined) ctx.ui.notify(warning, current.conflicts.length > 0 ? "error" : "warning");
+    if (guardNeedsWarning(current.guard)) {
+      // 降级要明说：不注入守卫时子代理不再受"先读后写"约束
+      ctx.ui.notify(describeGuardInjection(current.guard), "warning");
+    }
   });
 
   pi.on("session_shutdown", () => {
@@ -163,6 +176,7 @@ const subagentLite: ExtensionFactory = (pi) => {
           listing: current.listing,
           canResolve: (provider, id) => ctx.modelRegistry.find(provider, id) !== undefined,
           conflicts: current.conflicts,
+          guard: describeGuardInjection(current.guard),
           ...(ctx.model ? { sessionModel: { provider: ctx.model.provider, id: ctx.model.id } } : {}),
         }),
         "info",
@@ -246,7 +260,7 @@ const subagentLite: ExtensionFactory = (pi) => {
         model: modelChoice.model,
         thinkingLevel: thinking.level as SessionThinkingLevel | undefined,
         modelRuntime,
-        extensionPaths: current.config.guardExtensionPaths,
+        extensionPaths: current.guard.paths,
       });
       child = created.session;
       if (created.modelFallbackMessage !== undefined) {
@@ -310,9 +324,9 @@ const subagentLite: ExtensionFactory = (pi) => {
 /**
  * 子会话装配的唯一入口。
  *
- * **票据 14 的接入点就在这里**：往回传的 `extensionPaths` 里加 pi-read-guard 的路径即可
- * （`DefaultResourceLoader.additionalExtensionPaths` 在 `noExtensions: true` 下依然生效，已实测）。
- * 默认值（`import.meta.resolve`）与解析失败时的降级告警是票据 14 的范围。
+ * 票据 14（守卫注入）也走这里：`extensionPaths` 由 `src/guard.ts` 解析（默认自动找
+ * `@momenttttt/pi-read-guard`，`DefaultResourceLoader.additionalExtensionPaths` 在
+ * `noExtensions: true` 下依然生效，已实测）。解析失败只降级成空列表 + 一行告警，不中断子代理。
  *
  * 设计 §5 的选项表逐条落在这里：
  *   - `noExtensions: true` 必需：默认 loader 会重新发现扩展目录，把我们自己再加载一遍；

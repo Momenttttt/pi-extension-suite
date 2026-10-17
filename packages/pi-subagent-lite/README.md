@@ -73,7 +73,7 @@ enabled: true
 | 项 | 默认 | 说明 |
 | --- | --- | --- |
 | `enabled` | `true` | 关掉后不注册子代理行为 |
-| `guardExtensionPaths` | `[]` | 子会话额外加载的扩展路径（守卫注入入口）。v1 只认显式给的路径，写 `[]` 即关闭 |
+| `guardExtensionPaths` | 不写 = 自动 | 子会话额外加载的扩展路径。不写就自动解析 `@momenttttt/pi-read-guard` 并在子会话里注入它；写 `[]` 显式关闭；写路径列表则只用这些路径 |
 
 ## 设计取舍
 
@@ -91,14 +91,16 @@ enabled: true
 
 **`maxTurns` 默认不设。** 与 CC 的 Explore 一致：不控成本，跑到自然结束；跑飞时靠父级中断（Esc → `ctx.signal` → 子会话 `abort()`）兜底。
 
-**子代理的读态表是空的。** 子代理内的"先读后写"默认继承（由 `guardExtensionPaths` 把读守卫带进子会话时），但它拿到的是**空的**读态表：子代理必须自己读一遍才能改——与 CC 的普通子代理、ZCode 的子 Runtime 一致，代价是少量额外 token。
+**子代理默认也受"先读后写"约束，但读态表是空的。** 子会话默认注入 `pi-read-guard`（自动按包名解析，`guardExtensionPaths` 可指定或关闭），子代理必须自己读一遍才能改——与 CC 的普通子代理、ZCode 的子 Runtime 一致，代价是少量额外 token。解析不到守卫时**不中断**子代理：只把注入关掉、明确告警，`/agents` 里也显示"未注入"。
+
+**守卫路径的解析实测偏离了设计文档。** 设计写的是 `import.meta.resolve("@momenttttt/pi-read-guard")`，但 pi 用 jiti 加载扩展（模块被转成 `data:` URL），在那里 `import.meta.resolve` 会抛 `Invalid relative URL or base scheme is not hierarchical`；而且包名本身也没有 `main`/`exports`，解析出来的不是扩展文件。实现改成：优先 `import.meta.resolve`，抛了就退回 `createRequire(import.meta.url).resolve`，先解析 `<包>/package.json`、再按它的 `pi.extensions` 清单拼出扩展文件路径（两条路都实测过）。
 
 **子会话复用父会话的模型运行时。** 不这么做时 `model: inherit` 在子会话里会失败——父会话里由扩展注册的 provider（代理 provider 等）只存在于父会话的运行时中，子会话自建的那个不认识它。pi 没有公开的取法，所以这里按结构校验后复用；拿不到就退回"子会话自建"，并在工具结果里明说，不静默假设。
 
 ## 边界与已知限制
 
 - **与同类子代理扩展不并存。** pi 的工具注册是后写者胜且不报错，所以本插件在 `session_start` 扫 `pi.getAllTools()`，发现别人注册的 `Agent` / `Task` / `subagent` 就明确告警并建议卸载（`/agents` 里也列出来）。
-- **子会话的隔离靠 `noExtensions: true`。** 它同时也让子代理结构上不可能再派子代理。副作用是子代理默认拿不到任何扩展工具——除了通过 `guardExtensionPaths` 显式带进去的。
+- **子会话的隔离靠 `noExtensions: true`。** 它同时也让子代理结构上不可能再派子代理。副作用是子代理拿不到扩展工具——除了守卫这一条（`additionalExtensionPaths` 在 `noExtensions: true` 下依然生效，实测过）。
 - **子代理只拿到 `prompt` + 自己的系统提示词**，不继承父会话历史（不做 fork、没有上下文继承开关；v1 也不做后台执行与完成通知）。
 - **同一条助手消息里并行的多个 `general-purpose` 子代理可能互相踩文件**（它们都能写）。Explore 只读，并行安全。v1 不强制串行，只在提示词与档案里提示。
 - **结果体积上限 100k 字节**（UTF-8，`truncateHead`，超出时正文里注明），与 CC 的 `maxResultSizeChars` 同量级。
