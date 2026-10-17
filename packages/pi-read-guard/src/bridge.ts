@@ -13,7 +13,10 @@ export const READ_STATE_EVENT = "read-guard/file-read";
 
 /** 事件载荷：一次"某路径刚被读过"的登记。 */
 export interface ReadStateEventPayload {
-  /** 绝对路径（接收方自己算路径键）。 */
+  /**
+   * 目标路径。**请给绝对路径**：发布方与接收方可能不在同一个 cwd 下（两者是独立扩展），
+   * 相对路径会让两边算出不同的键。接收方按会话 cwd 解析，绝对路径下这一步是恒等的。
+   */
   path: string;
   mtimeMs: number;
   sizeBytes: number;

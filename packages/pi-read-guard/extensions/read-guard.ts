@@ -16,6 +16,7 @@
  */
 import { statSync } from "node:fs";
 import { readFile } from "node:fs/promises";
+import { matchesGlob } from "node:path";
 
 import type {
   ExtensionAPI,
@@ -44,8 +45,11 @@ import { ReadStateTable } from "../src/state.ts";
 const readGuard: ExtensionFactory = (pi: ExtensionAPI): void => {
   const table = new ReadStateTable();
   let config: ReadGuardConfig | undefined;
+  /** 最近一次回调给出的会话 cwd，供事件总线的读态登记算路径键用。 */
+  let sessionCwd: string | undefined;
 
   const configOf = (ctx: ExtensionContext): ReadGuardConfig => {
+    sessionCwd = ctx.cwd;
     config ??= loadConfig(ctx.cwd);
     return config;
   };
@@ -87,8 +91,12 @@ const readGuard: ExtensionFactory = (pi: ExtensionAPI): void => {
   pi.events.on(READ_STATE_EVENT, (payload) => {
     const record = payload as ReadStateEventPayload | undefined;
     if (!record || typeof record.path !== "string" || typeof record.mtimeMs !== "number") return;
+    // 事件的载荷没有 cwd（发布方只有一个路径），但接收方总会先经过至少一次带 ctx 的回调
+    // （`session_start` 最迟在第一次工具调用前必然跑到），所以用记下来的会话 cwd 算键，
+    // 而不是 `process.cwd()`——后者在宿主从别处启动 pi 时是错的。
+    const cwd = sessionCwd ?? process.cwd();
     table.set({
-      key: normalizePathKey(record.path, { cwd: process.cwd() }),
+      key: normalizePathKey(record.path, { cwd }),
       absolutePath: record.path,
       mtimeMs: record.mtimeMs,
       sizeBytes: typeof record.sizeBytes === "number" ? record.sizeBytes : 0,
@@ -130,6 +138,10 @@ const readGuard: ExtensionFactory = (pi: ExtensionAPI): void => {
 
     const key = normalizePathKey(event.input.path, { cwd: ctx.cwd });
     const absolutePath = absolutePathOf(event.input.path, ctx.cwd);
+
+    // 豁免：默认空数组，不预设豁免任何路径（记忆目录也在内，与 ZCode 侧的约束对称）。
+    // 判定用规范化后的绝对路径，且大小写/分隔符都已经统一，glob 不必再关心平台差异。
+    if (isExempt(key, absolutePath, configNow.exempt)) return;
 
     let currentMtimeMs: number | undefined;
     try {
@@ -248,6 +260,27 @@ function withCode(reason: string, code: WriteGateCode | undefined): string {
 function stringField(record: Record<string, unknown>, key: string): string | undefined {
   const value = record[key];
   return typeof value === "string" ? value : undefined;
+}
+
+/**
+ * 路径是否命中豁免 glob。
+ *
+ * 两个候选都试：规范化键（大小写与分隔符已统一，跨平台一致）与真实绝对路径
+ * （用户写 `**​/generated/**` 这种与平台无关的写法时更直观）。glob 写法不合法时
+ * 视为不匹配——配置错了不该让插件崩，也不该意外放行。
+ */
+function isExempt(key: string, absolutePath: string, exempt: readonly string[]): boolean {
+  for (const pattern of exempt) {
+    const normalized = pattern.split("\\").join("/");
+    for (const candidate of [key, absolutePath.split("\\").join("/"), absolutePath]) {
+      try {
+        if (matchesGlob(candidate, normalized)) return true;
+      } catch {
+        // 非法 glob：跳过
+      }
+    }
+  }
+  return false;
 }
 
 function absolutePathOf(path: string, cwd: string): string {

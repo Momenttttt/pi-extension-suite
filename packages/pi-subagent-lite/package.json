@@ -17,6 +17,7 @@
   },
   "files": [
     "extensions",
+    "src",
     "agents",
     "README.md",
     "LICENSE"
