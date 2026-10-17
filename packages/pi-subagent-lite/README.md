@@ -1,122 +1,123 @@
 # @momenttttt/pi-subagent-lite
 
-进程内、默认隔离的轻量子代理。
+[中文文档](https://github.com/Momenttttt/pi-extension-suite/blob/main/packages/pi-subagent-lite/README.zh-CN.md) · [pi extension suite](https://github.com/Momenttttt/pi-extension-suite)
 
-- 两个内置代理：`Explore`（只读广搜）、`general-purpose`（通用委派）
-- 代理由 md 档案定义，放在三个可预期的目录里；同名档案**整份替换**
-- 子代理对话不落盘、不继承父会话历史，也**不能再派子代理**（递归不可能）
-- 模型侧工具名 `subagent`
+Lightweight subagents that run in-process and are isolated by default.
 
-## 安装
+- Two built-in agents: `Explore` (read-only broad search) and `general-purpose`
+- Agents are defined by markdown profiles in three predictable directories; a profile with the same name **replaces the built-in one whole**
+- A subagent's conversation is never written to disk, it does not inherit the parent's history, and it **cannot spawn subagents of its own** (recursion is impossible by construction)
+- The model-facing tool name is `subagent`
+
+## Install
 
 ```bash
 pi install npm:@momenttttt/pi-subagent-lite
 ```
 
-本地开发：
+Or load a working copy from a checkout, without installing it:
 
 ```bash
 pi -e ./packages/pi-subagent-lite/extensions/subagent-lite.ts
 ```
 
-## 用法
+## Usage
 
-模型调用：
+The model calls:
 
 ```
 subagent(description, prompt, subagent_type?, model?)
 ```
 
-`description` 与 `prompt` 必填；省略 `subagent_type` 走 `general-purpose`。子代理看不到当前对话，所有需要的上下文都要写进 `prompt`。工具结果 = 子代理的最终文本 + 一行摘要（`agent` / `status` / `turns` / `tool_calls` / `duration` / `tokens`），结构化同项在 `details` 里。
+`description` and `prompt` are required; leaving `subagent_type` out uses `general-purpose`. A subagent cannot see the current conversation, so everything it needs has to be written into `prompt`. The tool result is the subagent's final text plus a one-line summary (`agent` / `status` / `turns` / `tool_calls` / `duration` / `tokens`), with the same items in structured form under `details`.
 
-`/agents` 列出最终生效的代理（来源、解析出的实际模型、工具数与个数、提示词模式、是否读 `AGENTS.md`、`maxTurns`），以及被跳过的文件与原因、覆盖告警、与同类扩展的冲突。
+`/agents` lists the agents that are actually in effect (source, resolved model, tool count, prompt mode, whether it reads `AGENTS.md`, `maxTurns`), along with any files that were skipped and why, override warnings, and conflicts with similar extensions.
 
-## 代理档案
+## Agent profiles
 
 ```markdown
 ---
-name: reviewer            # 省略时用文件名
-description: 何时该用这个代理
-tools: read, grep, find   # 字符串或数组；"*" 或省略 = 该 SDK 的默认全量
-disallowedTools: write    # 从 tools 结果里再减
-model: inherit            # inherit（默认，跟随会话模型）或 provider/model
-thinking: inherit         # inherit 或 off/minimal/low/medium/high/xhigh/max
-maxTurns: 12              # 可选；不写则不限
-promptMode: append        # append（默认，追加到 pi 标准提示词之后）| replace
-injectAgentsMd: true      # 子代理是否读项目 AGENTS.md
+name: reviewer            # falls back to the file name when omitted
+description: when this agent should be used
+tools: read, grep, find   # string or array; "*" or omitted = the SDK's full default set
+disallowedTools: write    # subtracted from the result of tools
+model: inherit            # inherit (default, follows the session model) or provider/model
+thinking: inherit         # inherit, or off/minimal/low/medium/high/xhigh/max
+maxTurns: 12              # optional; no limit when absent
+promptMode: append        # append (default, after pi's standard prompt) | replace
+injectAgentsMd: true      # whether the subagent reads the project AGENTS.md
 enabled: true
 ---
 
-正文会追加进子代理的系统提示词（`promptMode: replace` 时整段替换）。
+The body is appended to the subagent's system prompt (or replaces it entirely under `promptMode: replace`).
 ```
 
-**加载层序**（低 → 高，同名整文件替换，覆盖时打告警）：
+**Load order** (low to high; the same name replaces the whole file, with a warning):
 
-| 层 | 位置 |
+| Layer | Location |
 | --- | --- |
-| 内置 | 代码里的 `Explore` 与 `general-purpose` |
-| 用户级 | `<agent-dir>/agents/*.md`（默认 `~/.pi/agent/agents`） |
-| 项目级（兼容） | `<repo>/.agents/agents/*.md` |
-| 项目级（权威） | `<repo>/.pi/agents/*.md` |
+| Built-in | `Explore` and `general-purpose`, from the code |
+| User level | `<agent-dir>/agents/*.md` (default `~/.pi/agent/agents`) |
+| Project (compatibility) | `<repo>/.agents/agents/*.md` |
+| Project (authoritative) | `<repo>/.pi/agents/*.md` |
 
-项目目录从当前工作目录向上找，遇到含 `.pi/` 或 `.agents/` 的目录即取，走到 git 根为止——**最近的一层赢**。目录非递归（只看那一层）。解析失败只让该文件进 `/agents` 的「跳过 + 原因」，不阻断启动。
+The project directory is found by walking up from the current working directory: the first directory that contains `.pi/` or `.agents/` wins, and the walk stops at the git root, so the nearest layer wins. Directories are not searched recursively (only that one level). A file that fails to parse only shows up in `/agents` as "skipped, with a reason"; it never blocks startup.
 
-旧字段名兼容（读到旧名会给警告，不静默）：`display_name` → `name`、`prompt_mode` → `promptMode`、`disallowed_tools` → `disallowedTools`、`max_turns` → `maxTurns`。
+Older field names still work, with a warning rather than silently: `display_name` → `name`, `prompt_mode` → `promptMode`, `disallowed_tools` → `disallowedTools`, `max_turns` → `maxTurns`.
 
-## 配置
+## Configuration
 
-两个位置，深合并，项目覆盖全局：
+Two locations, deep-merged, project over global:
 
-- 全局：`<agent-dir>/extensions/subagent-lite.json`
-- 项目：`<cwd>/.pi/subagent-lite.json`
+- Global: `<agent-dir>/extensions/subagent-lite.json`
+- Project: `<cwd>/.pi/subagent-lite.json`
 
-| 项 | 默认 | 说明 |
+| Option | Default | Meaning |
 | --- | --- | --- |
-| `enabled` | `true` | 关掉后 `subagent` 工具仍在（工具无法注销），但每次调用会直接回一条"已在配置里关闭"，不跑子会话；冲突检测与守卫注入告警也停用 |
-| `guardExtensionPaths` | 不写 = 自动 | 子会话额外加载的扩展路径。不写就自动解析 `@momenttttt/pi-read-guard` 并在子会话里注入它；写 `[]` 显式关闭；写路径列表则只用这些路径 |
+| `enabled` | `true` | when off, the `subagent` tool stays registered (a tool cannot be unregistered) but every call returns "disabled in configuration" without running a sub-session; conflict detection and guard-injection warnings are off too |
+| `guardExtensionPaths` | unset = automatic | extension paths loaded into sub-sessions in addition. Unset resolves `@momenttttt/pi-read-guard` automatically and injects it into sub-sessions; `[]` turns that off explicitly; a list of paths uses only those |
 
-## 设计取舍
+## Design tradeoffs
 
-**Explore 的只读是提示词级的约定，不是沙箱。** `Explore` 保留完整 `bash`，工具池里只是没有 `edit` / `write`；只读语义由它系统提示词里那两段禁令承担（允许的只读命令类别 + 明确禁止的类别 + "拿不准就先报告"）。用命令策略去"硬化"它是一条可被怪写法绕过的假沙箱，还会让"Explore 能做什么"变成本项目独有语义。README 与提示词都不暗示有强制只读：模型若无视提示词，仍可能写出文件。
+**Explore's read-only is an agreement at the prompt level, not a sandbox.** `Explore` keeps the full `bash` tool; `edit` / `write` are simply absent from its tool pool. The read-only semantics are carried by two paragraphs of its system prompt (which classes of read-only commands are allowed, which are explicitly forbidden, and "if you are unsure, report first"). Hardening it with a command policy would be a fake sandbox that a creative command line can slip past, and it would make "what Explore can do" mean something unique to this project. Neither this README nor the prompt implies enforcement: a model that ignores the prompt can still write files.
 
-**两个内置代理都跟随会话模型（`model: inherit`），不写死模型。** 好处是能力与成本口径一致、切换模型时子代理跟着切；代价是 Explore 类广搜的账单跟着会话模型走，可能比固定用一个便宜模型贵。需要省钱就在档案里给单个代理写 `model: provider/id`，`/agents` 会显示每个代理解析出的实际模型，避免"以为用的是便宜模型"。
+**Both built-in agents follow the session model (`model: inherit`) rather than pinning one.** Capability and cost stay on the same footing, and switching models switches the subagents with it. The cost is that a broad search like Explore is billed at the session model's rate, which can be more expensive than pinning a cheap model. To save money, put `model: provider/id` in a profile; `/agents` shows the model actually resolved for each agent, so you are never wrong about what you are paying for.
 
-**同名档案整份替换，不做字段合并。** 想只改内置 Explore 的模型，就得把它的定义整份抄下来改——这是可接受的成本，换来的是一份代理定义永远自洽（不会出现半新半旧的字段）。pi 自己的资源覆盖也是整文件语义。
+**A same-name profile replaces the whole file; fields are never merged.** To change only the built-in Explore's model, you copy its definition and edit that. That is an acceptable cost for a property worth having: a profile is always self-consistent, never half old and half new. pi's own resource overrides are whole-file too.
 
-**子代理会话不落盘。** 落盘的动机通常是支撑 resume/续聊；本插件不需要 resume，于是不写盘——不占磁盘，也不把子代理读过的敏感内容落到盘上。将来的 resume 要重新评估这个决定。
+**Subagent sessions are never written to disk.** Persisting usually exists to support resume, and this plugin has no resume, so nothing is written: no disk usage, and nothing a subagent read lands on disk. A future resume feature will have to revisit this decision.
 
-**用量回传给父会话。** pi 的会话合计依赖工具结果里的 `usage`，所以一律回传，账要准。
+**Usage is reported back to the parent.** pi's session totals depend on the `usage` in tool results, so it is always passed through. The numbers have to be right.
 
-**`details.truncated` 只管正文截断，`maxTurns` 到点停由 `status: "max_turns"` 表达。** 设计文档把"结果被截断"和"没跑完"合用一个布尔字段，这里拆开：一个布尔表达不了两件事，而 `status` 本来就能区分。
+**`details.truncated` covers body truncation only; stopping at `maxTurns` is expressed as `status: "max_turns"`.** The design document folded "the result was truncated" and "it did not finish" into one boolean, and they are split apart here: one boolean cannot say two things, and `status` already distinguishes them.
 
-**`turns` 是近似值。** 按 assistant 消息条数计数（实测 `message_end` 每条消息一次，次数与 `turn_end` 一致），不是"模型轮次"的严格口径；中途被中断时 pi 还会补一条空的 assistant 消息，所以中断场景下它会多算一条。`maxTurns` 只用于"到点就停"，宁可早停不跑飞。
+**`turns` is an approximation.** It counts assistant messages (measured: one `message_end` per message, the same count as `turn_end`), which is not a strict "model turns" measure; when a run is interrupted pi adds an empty assistant message, so an interrupted run counts one extra. `maxTurns` only exists to stop at a limit: stopping early beats running away.
 
-**`maxTurns` 默认不设。** 不控成本，跑到自然结束；跑飞时靠父级中断（Esc → `ctx.signal` → 子会话 `abort()`）兜底。
+**`maxTurns` is unset by default.** Cost is not capped, and a run simply goes until it stops. When one runs away, an interrupt from the parent is the backstop (Esc → `ctx.signal` → the sub-session's `abort()`).
 
-**子代理默认也受"先读后写"约束，但读态表是空的。** 子会话默认注入 `pi-read-guard`（自动按包名解析，`guardExtensionPaths` 可指定或关闭），子代理必须自己读一遍才能改——读态表不继承父会话，代价是少量额外 token。解析不到守卫时**不中断**子代理：只把注入关掉、明确告警，`/agents` 里也显示"未注入"。
+**Subagents are subject to read-before-write by default, starting from an empty read-state table.** A sub-session has `pi-read-guard` injected by default (resolved by package name; `guardExtensionPaths` can name paths or turn it off), so a subagent has to read a file itself before changing it. Read state is not inherited from the parent, at the cost of a few extra tokens. When the guard cannot be resolved the subagent is **not** cut off: injection is turned off with a clear warning, and `/agents` says "not injected".
 
-**守卫路径的解析实测偏离了设计文档。** 设计写的是 `import.meta.resolve("@momenttttt/pi-read-guard")`，但 pi 用 jiti 加载扩展（模块被转成 `data:` URL），在那里 `import.meta.resolve` 会抛 `Invalid relative URL or base scheme is not hierarchical`；而且包名本身也没有 `main`/`exports`，解析出来的不是扩展文件。实现改成：优先 `import.meta.resolve`，抛了就退回 `createRequire(import.meta.url).resolve`，先解析 `<包>/package.json`、再按它的 `pi.extensions` 清单拼出扩展文件路径（两条路都实测过）。
+**Resolving the guard path deviates from the design document, based on measurement.** The design said `import.meta.resolve("@momenttttt/pi-read-guard")`, but pi loads extensions with jiti (modules become `data:` URLs), where `import.meta.resolve` throws `Invalid relative URL or base scheme is not hierarchical`; and the package has no `main`/`exports` anyway, so that would not resolve to the extension file. The implementation tries `import.meta.resolve` first and falls back to `createRequire(import.meta.url).resolve` when it throws, resolving `<package>/package.json` and then building the extension file path from its `pi.extensions` list. Both paths were measured.
 
-**子会话复用父会话的模型运行时。** 不这么做时 `model: inherit` 在子会话里会失败——父会话里由扩展注册的 provider（代理 provider 等）只存在于父会话的运行时中，子会话自建的那个不认识它。pi 没有公开的取法，所以这里按结构校验后复用；拿不到就退回"子会话自建"，并在工具结果里明说，不静默假设。
+**Sub-sessions reuse the parent session's model runtime.** Without that, `model: inherit` fails inside a sub-session: a provider registered by an extension in the parent session (a proxy provider, say) exists only in the parent's runtime, and the one a sub-session builds itself does not know it. pi exposes no public way to get it, so it is reused after a structural check; when that is not possible, it falls back to a self-built sub-session runtime and says so in the tool result rather than assuming silently.
 
-## 边界与已知限制
+## Boundaries and known limits
 
-- **与同类子代理扩展不并存。** pi 的工具注册是后写者胜且不报错，所以本插件在 `session_start` 扫 `pi.getAllTools()`，发现别人注册的 `Agent` / `Task` / `subagent` 就明确告警并建议卸载（`/agents` 里也列出来）。
-- **子会话的隔离靠 `noExtensions: true`。** 它同时也让子代理结构上不可能再派子代理。副作用是子代理拿不到扩展工具——除了守卫这一条（`additionalExtensionPaths` 在 `noExtensions: true` 下依然生效，实测过）。
-- **子代理只拿到 `prompt` + 自己的系统提示词**，不继承父会话历史（不做 fork、没有上下文继承开关；v1 也不做后台执行与完成通知）。
-- **同一条助手消息里并行的多个 `general-purpose` 子代理可能互相踩文件**（它们都能写）。Explore 只读，并行安全。v1 不强制串行，只在提示词与档案里提示。
-- **结果体积上限 100k 字节**（UTF-8，`truncateHead`，超出时正文里注明）。
-- **后台执行、技能预加载、worktree 隔离、每代理持久记忆**都不做（后台执行列 v2）。
+- **Does not coexist with other subagent extensions.** pi's tool registration is last-writer-wins and silent, so this plugin scans `pi.getAllTools()` at `session_start` and, when someone else's `Agent` / `Task` / `subagent` is registered, warns clearly and suggests uninstalling the other one (`/agents` lists them as well).
+- **Sub-session isolation rests on `noExtensions: true`.** The same flag makes it structurally impossible for a subagent to spawn another. The side effect is that subagents get no extension tools, with one exception: the guard still applies, because `additionalExtensionPaths` takes effect under `noExtensions: true` too (measured).
+- **A subagent gets only `prompt` plus its own system prompt.** It does not inherit the parent's history (no forking, no context-inheritance switch; v1 also skips background execution and completion notifications).
+- **Several `general-purpose` subagents running in parallel within one assistant message can step on the same files** (they can all write). Explore is read-only and safe to parallelize. v1 does not force serialization; the prompt and the profiles merely advise it.
+- **Result size is capped at 100k bytes** (UTF-8, `truncateHead`, noted in the body when it happens).
+- **Background execution, skill preloading, worktree isolation and per-agent persistent memory are out of scope** (background execution is on the v2 list).
 
-## 开发
+## Verify before installing
 
 ```bash
 npm install
-npm run check        # typecheck + test + 文档交叉引用
-git config core.hooksPath .githooks   # 提交身份与提交信息格式钩子
+npm run check        # typecheck + tests
 ```
 
-测试分两层：纯层单测（前置元数据解析、层序与覆盖、工具/模型折算、报告与冲突识别），以及"进程内真实会话 + 桩 provider"的端到端测试（委派一个只读任务、用量计入父会话合计、中断后 `status: aborted`、子会话工具池与提示词模式）。
+The checks run offline: they cover profile parsing and layer order, delegating over a real session, usage reported back to the parent, and interrupts.
 
 ## License
 

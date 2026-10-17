@@ -26,6 +26,7 @@
     "extensions",
     "src",
     "README.md",
+    "README.zh-CN.md",
     "LICENSE"
   ],
   "pi": {

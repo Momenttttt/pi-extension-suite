@@ -1,51 +1,51 @@
 # @momenttttt/pi-zcode-memory
 
-让 pi 与 ZCode 共用同一份项目记忆。
+[中文文档](https://github.com/Momenttttt/pi-extension-suite/blob/main/packages/pi-zcode-memory/README.zh-CN.md) · [pi extension suite](https://github.com/Momenttttt/pi-extension-suite)
 
-- 三个工具：`memory_list`、`memory_read`、`memory_write`
-- 会话开始时只把 `MEMORY.md` 索引注入一次；正文永不自动注入，按需读
-- 目录算法、索引格式、事实文件 frontmatter 逐条对齐 ZCode，两边读写同一批文件
-- `/memory` 查看状态与索引体检，`/memory reload` 强制下一次运行重新注入
+One project memory shared between pi and ZCode.
 
-## 安装
+- Three tools: `memory_list`, `memory_read`, `memory_write`
+- Only the `MEMORY.md` index is injected, once, at session start; bodies are never injected automatically and are read on demand
+- The directory algorithm, the index format and the fact-file frontmatter all follow ZCode item by item, so both sides read and write the same files
+- `/memory` shows the status and checks the index; `/memory reload` forces the next run to inject again
+
+## Install
 
 ```bash
 pi install npm:@momenttttt/pi-zcode-memory
 ```
 
-本地开发：
+Or load a working copy from a checkout, without installing it:
 
 ```bash
 pi -e ./packages/pi-zcode-memory/extensions/zcode-memory.ts
 ```
 
-## 记忆目录怎么定位
+## How the memory directory is located
 
-按共享记忆目录的路径算法计算：
+Computed with the shared memory directory's path algorithm:
 
 ```
-~/.zcode -> 追加 cli（basename 已是 cli 则不追加）
+~/.zcode -> append cli (not appended when the basename already is cli)
 <storageRoot>/memories/projects/<slug>-<hash16>/memory/
 hash16 = sha256(win32 ? resolve(cwd).toLowerCase() : resolve(cwd)).slice(0, 16)
-slug   = 小写、非 [a-z0-9._-] 换 -、去首尾 -、截 48、空则 project
+slug   = lowercase, non [a-z0-9._-] to -, trim leading/trailing -, cut to 48, "project" when empty
 ```
 
-实际使用时有三级回退：
+At runtime there are three tiers of fallback:
 
-1. 配置里的 `dir`（最高优先级；路径算法对不上时用它，例如工作区标识或路径写法差异）
-2. 算法算出的路径存在 → 用它
-3. 不存在时，`memories/projects/` 下恰好一个 `<slug>-*` 目录 → 用它并警告；
-   否则视为"该项目尚无 ZCode 记忆"（不创建目录；`memory_write` 时才按计算路径创建）
+1. `dir` from the configuration (highest priority; for when the algorithm does not match, e.g. a workspace identity or a different spelling of the path)
+2. The path the algorithm computes, when it exists
+3. When it does not exist: exactly one `<slug>-*` directory under `memories/projects/` is used, with a warning; otherwise the project is treated as having no ZCode memory yet (no directory is created; `memory_write` creates it under the computed path when it is actually needed)
 
-检测到 `project-` 前缀目录时会提示：ZCode 可能用了 workspace identity（slug 固定为 `project`，
-hash 输入不是路径）。独立 CLI 与普通桌面项目不会出现这种情况。
+A directory carrying the `project-` prefix triggers a note: ZCode may have used a workspace identity (slug fixed to `project`, hash input not a path). Standalone CLI sessions and ordinary desktop projects do not look like that.
 
-## 配置
+## Configuration
 
-两个位置，深合并，项目覆盖全局：
+Two locations, deep-merged, project over global:
 
-- 全局：`<agent-dir>/extensions/zcode-memory.json`（默认 `~/.pi/agent/extensions/zcode-memory.json`）
-- 项目：`<cwd>/.pi/zcode-memory.json`
+- Global: `<agent-dir>/extensions/zcode-memory.json` (default `~/.pi/agent/extensions/zcode-memory.json`)
+- Project: `<cwd>/.pi/zcode-memory.json`
 
 ```json
 {
@@ -55,98 +55,72 @@ hash 输入不是路径）。独立 CLI 与普通桌面项目不会出现这种�
 }
 ```
 
-| 项 | 默认 | 说明 |
+| Option | Default | Meaning |
 | --- | --- | --- |
-| `enabled` | `true` | 关掉后工具仍注册，但不注入索引（工具本身仍可用） |
-| `dir` | 无 | 显式记忆目录。任意异常场景的兜底 |
-| `injectIndex` | `true` | 是否做索引注入 |
+| `enabled` | `true` | when off, the tools stay registered but the index is not injected (the tools themselves still work) |
+| `dir` | none | explicit memory directory. The fallback for any case the algorithm cannot handle |
+| `injectIndex` | `true` | whether to inject the index |
 
-配置解析失败（文件坏了、JSON 不合法）不会让插件崩，退回默认值。
+A config that fails to parse (corrupt file, invalid JSON) does not crash the extension; it falls back to the defaults.
 
-## 工具
+## Tools
 
-| 工具 | 行为 |
+| Tool | Behavior |
 | --- | --- |
-| `memory_list` | 递归扫记忆目录（排除 `MEMORY.md`、不跟随目录符号链接），返回文件名 / name / description / type / mtime。坏 frontmatter 降级成"无描述条目"，不抛错 |
-| `memory_read` | 按 name 或文件名定位；返回 frontmatter 摘要 + 正文。正文按 ZCode 召回上限截断（前 200 行 / 4096 字节）并提示去哪里读全文 |
-| `memory_write` | `name` / `description` / `type` / `body` / `mode: create\|upsert`。原子写事实文件 + 维护 `MEMORY.md` 索引行 |
+| `memory_list` | walks the memory directory recursively (skipping `MEMORY.md`, not following directory symlinks) and returns file name / name / description / type / mtime. Broken frontmatter degrades to an entry with no description instead of throwing |
+| `memory_read` | locates a memory by name or file name and returns the frontmatter summary plus the body. The body is truncated at ZCode's recall limit (first 200 lines / 4096 bytes) with a pointer to where the full text can be read |
+| `memory_write` | takes `name` / `description` / `type` / `body` / `mode: create\|upsert`. Writes the fact file atomically and maintains its line in the `MEMORY.md` index |
 
-写入的 frontmatter 只有四个键：
+A written frontmatter carries four keys and no more:
 
 ```yaml
 ---
 name: <kebab-case-slug>
-description: <一行描述>
+description: <one-line description>
 metadata:
   node_type: memory
   type: user | feedback | project | reference
 ---
 ```
 
-**不写** `originSessionId`（那是读文件的一方在缺失时自己补的惰性字段，我们不伪造不属于自己的
-会话 id），也不在 `metadata` 里加自定义键。
+`originSessionId` is **not** written: that is a lazy field the reading side fills in itself when it is missing, and borrowing another tool's session id would be a fabrication. No custom keys are added to `metadata` either.
 
-## 设计取舍
+## Design tradeoffs
 
-**为什么索引只注入一次，而不是每轮重注？**
-只有 `MEMORY.md` 进上下文，正文按需读。注入形态是 `before_agent_start` 返回的
-一条 `display: false` custom 消息（不是塞进 system prompt）。之后用
-`pi.appendEntry("zcode-memory/injected", { indexHash })` 记标记；`session_start`
-（new / resume / fork）按当前会话投影重建标记。重新注入只有三种情况：索引内容 hash 变化、
-注入消息被压缩摘要掉（不在保留尾部里）、`/memory reload`。`messageType === "custom"`
-的运行（`pi.sendMessage(..., { triggerTurn: true })` 起的）直接跳过。
+**Why is the index injected once instead of on every turn?**
+Only `MEMORY.md` enters the context; bodies are read on demand. The injection is a `display: false` custom message returned from `before_agent_start` (not stuffed into the system prompt). A marker is then recorded with `pi.appendEntry("zcode-memory/injected", { indexHash })`, and `session_start` (new / resume / fork) rebuilds the marker from the current session projection. Re-injection happens in exactly three cases: the index content hash changed, the injected message was summarized away (no longer in the kept tail), or `/memory reload` was run. Runs with `messageType === "custom"` (started by `pi.sendMessage(..., { triggerTurn: true })`) are skipped outright.
 
-**为什么 `memory_write` 走 `withFileMutationQueue` + revision 重试，而不是做跨进程锁？**
-ZCode 的前台写本来就没有跨进程锁（后台整理进程除外），它靠 revision
-（`mtime:<截断毫秒>:size:<字节>`）发现并发。我们走同一条自愈路径：进程内用 pi 的写队列
-串行；`MEMORY.md` 写前比对 revision，不一致就重读重试一次，再失败就报错让模型重试——
-**不静默覆盖**。代价是 ZCode 下一次写会撞上 revision 冲突，它重读索引后即可继续。
+**Why does `memory_write` use `withFileMutationQueue` plus a revision retry instead of a cross-process lock?**
+ZCode's foreground writes have no cross-process lock either (only its background organizing process does); it detects concurrency through a revision (`mtime:<truncated ms>:size:<bytes>`). This package takes the same self-healing path: writes are serialized in-process through pi's queue, and before writing `MEMORY.md` the revision is compared; on a mismatch it re-reads and retries once, and on a second failure it returns an error for the model to retry. It **never** overwrites silently. The cost is that ZCode's next write hits a revision conflict, which it resolves by re-reading the index.
 
-**为什么 `memory_read` 后要发读态事件？**
-用 `memory_read` 读过的记忆，紧接着用内置 `edit` 修改时不应该再被
-[pi-read-guard](https://github.com/Momenttttt/pi-extension-suite) 要求"先读"。两个包通过
-`pi.events` 共享总线互通（频道 `read-guard/file-read`）：发布方只 `emit`，接收方只 `on`，
-任一方缺席时静默降级，没有 import 依赖。相比"配置声明的读态提供方"，少一层配置形状与
-解析规则，收益相同。截断读发布 `kind: "truncated"` 且不带内容 hash —— 截断读不能成为
-写水位，和内置 `read` 的 `details.truncation` 是同一条规则。
+**Why does `memory_read` emit a read-state event?**
+A memory read through `memory_read` and then modified with the built-in `edit` should not be rejected by [pi-read-guard](https://github.com/Momenttttt/pi-extension-suite/blob/main/packages/pi-read-guard/README.md) for not having been read. The two packages talk over `pi.events` (channel `read-guard/file-read`): the publisher only `emit`s, the subscriber only `on`s, and either side's absence degrades silently. There is no import dependency between them. Compared with a "configure your read-state provider" approach, this drops a layer of configuration shape and parsing rules for the same benefit. A truncated read publishes `kind: "truncated"` with no content hash: a truncated read cannot become a write watermark, the same rule the built-in `read` follows through `details.truncation`.
 
-**为什么正文读取要有截断上限？**
-`memory_read` 返回的就是"会话里实际可用的量"：一条记忆被召回时最多取前 200 行 /
-4096 字节，完整内容始终可以用内置 `read` 读。这样模型不会误以为工具给了全文。
+**Why cap what `memory_read` returns?**
+What `memory_read` returns is what is actually available in the session: a recalled memory carries at most its first 200 lines / 4096 bytes, and the full text is always reachable with the built-in `read`. That way the model does not mistake the tool output for the whole file.
 
-**为什么目录算法不做 `~` 展开、不做 realpath？**
-hash 的输入就是 `resolve(cwd)` 这个路径字符串。realpath 会把符号链接/短路径折成另一个
-字符串，反而算错目录。win32 折叠大小写也是同一个目的：让同一目录的不同写法落到同一个 hash。
+**Why does the directory algorithm skip `~` expansion and realpath?**
+The hash input is the path string `resolve(cwd)` and nothing else. realpath would fold symlinks and short paths into a different string and compute the wrong directory. Folding case on win32 serves the same purpose: different spellings of one directory land on the same hash.
 
-## 边界与已知限制
+## Boundaries and known limits
 
-- **与 ZCode 是最终一致，不是实时同步。** ZCode 的 `MEMORY.md` **整个运行期只读一次**，
-  刷新点只有首次上下文初始化、冷恢复、`/clear`。**压缩不是刷新点**——陈旧索引会活过压缩。
-  所以 pi 写完记忆后，ZCode 那个正在跑的会话看不到，要到新会话/冷恢复才可见；事实文件正文
-  不被缓存，比索引新鲜。
-- **ZCode 的 `Write` 是整体覆盖。** 它拿着旧快照写 `MEMORY.md` 时，我们的外部改动会被
-  整份盖掉（它不会合并）。缓解只有"每次写前读一次"和"不要在 ZCode 正主动写记忆时批量写"。
-- **索引可能被模型写坏。** `memory_list` 走文件系统兜底；`/memory` 给出孤儿索引行与
-  未入索引文件的体检，但**不自动修正**索引。
-- **frontmatter 只在前 30 行内解析。** 闭合行更靠后的文件，读它的一方同样会当成
-  "无描述条目"——所以写文件时 frontmatter 必须短。
-- **写入拒绝跟随符号链接。** 目标是符号链接时报错，要求传真实路径。
-- **`memory_read` 截断读不会成为写水位**：接着用内置 `edit` 改同一文件仍会被
-  pi-read-guard 要求重读（先读后写约束的预期行为）。
-- **没有删除工具、没有自动抽取。** v1 需要"忘记"时用内置 `bash rm`；提炼记忆走显式
-  工具调用，不在后台跑模型。
-- **索引是 `custom_message`**，不在 pi-context-guard 微压缩的可清理白名单里，不会被清理。
+- **Eventual consistency with ZCode, not live sync.** ZCode reads `MEMORY.md` **once for the entire run**; it refreshes only at first context initialization, cold resume and `/clear`. **Compaction is not a refresh point**, so a stale index survives it. After pi writes a memory, a ZCode session that is already running cannot see it until a new session or a cold resume; fact-file bodies are not cached and are fresher than the index.
+- **ZCode's `Write` is a full overwrite.** When it writes `MEMORY.md` from a stale snapshot, outside changes are wiped wholesale (it does not merge). The only mitigations are reading before every write, and not batch-writing while ZCode is actively writing memory.
+- **The index can be corrupted by the model.** `memory_list` falls back to the filesystem; `/memory` reports orphan index lines and files missing from the index, but does not repair the index automatically.
+- **Frontmatter is only parsed within the first 30 lines.** A file whose closing `---` sits lower is treated as having no description by whichever side reads it, so a written frontmatter has to stay short.
+- **Writes refuse to follow symlinks.** A symlink target is an error, and the real path has to be passed instead.
+- **A truncated `memory_read` does not become a write watermark**: editing the same file with the built-in `edit` afterwards still triggers a re-read demand from pi-read-guard. That is the expected behavior of the read-before-write rule.
+- **No delete tool, no automatic extraction.** In v1, forgetting something means the built-in `bash rm`; distilling memory is an explicit tool call, with no background model run.
+- **The index is a `custom_message`**, outside pi-context-guard's prunable whitelist, so it is never pruned.
 
-## 开发
+## Verify before installing
 
 ```bash
 npm install
-npm run check        # typecheck + test + 文档交叉引用
-git config core.hooksPath .githooks   # 提交身份与提交信息格式钩子
+npm run check        # typecheck + tests
 ```
 
-测试分两层：纯函数单测（目录算法、frontmatter、解析/截断、索引行、注入决策），以及
-"进程内真实会话 + 桩 provider"的端到端测试（工具输出、索引注入、与 read-guard 的互通）。
+The checks run offline: they cover the directory algorithm, frontmatter parsing, index injection, and the hand-off with pi-read-guard.
 
 ## License
 
