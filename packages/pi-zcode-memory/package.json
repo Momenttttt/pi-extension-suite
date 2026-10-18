@@ -1,6 +1,6 @@
 {
   "name": "@momenttttt/pi-zcode-memory",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Share ZCode's per-project memory directory from pi (memory_read / memory_write / memory_list)",
   "license": "MIT",
   "type": "module",

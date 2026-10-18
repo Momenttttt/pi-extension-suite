@@ -1,6 +1,6 @@
 {
   "name": "@momenttttt/pi-read-guard",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Read-before-write guard for pi's built-in edit and write tools",
   "license": "MIT",
   "type": "module",

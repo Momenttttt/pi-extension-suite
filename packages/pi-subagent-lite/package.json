@@ -1,6 +1,6 @@
 {
   "name": "@momenttttt/pi-subagent-lite",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "In-process, isolated lightweight subagents for pi: Explore and general-purpose plus markdown agent profiles",
   "license": "MIT",
   "type": "module",
