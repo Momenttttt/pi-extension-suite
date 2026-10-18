@@ -124,7 +124,9 @@ const zcodeMemory: ExtensionFactory = (pi: ExtensionAPI): void => {
     description:
       "Read one project memory's frontmatter summary and body. The parameter is the memory's name or filename. " +
       "A body longer than 200 lines or 4096 bytes is truncated at the same limit ZCode uses when it recalls a memory, " +
-      "and the result says where to read the full text — so what you see here is what is actually usable in a session.",
+      "and the result says where to read the full text — so what you see here is what is actually usable in a session. " +
+      "Memory files are managed through these tools only: read a memory with memory_read, never with the built-in read tool. " +
+      "The only exception is a truncated body: the result then says where to read the rest.",
     promptSnippet: "Read the body of one project memory",
     parameters: memoryReadParams,
     exposure: "direct",
@@ -205,7 +207,9 @@ const zcodeMemory: ExtensionFactory = (pi: ExtensionAPI): void => {
       "Write one long-term fact into the project memory directory shared with ZCode, and maintain its MEMORY.md index line. " +
       "Memories are long-term facts (user preferences, working-style feedback the user gave, project constraints, external resources), **not a to-do list**, " +
       "and not temporary state that ends with the conversation; do not write down information that the repository code, git history, or this task already answers. " +
-      "Before writing, work out whether an existing memory covers the same thing: if so, upsert it rather than creating a duplicate entry.",
+      "Before writing, work out whether an existing memory covers the same thing: if so, upsert it rather than creating a duplicate entry. " +
+      "Memory files are managed through these tools only: create or change a memory with memory_write, never with the built-in write or edit. " +
+      "Only this tool keeps the fact file and its MEMORY.md index line in sync; a fact written by hand has no index line, and later sessions cannot see it.",
     promptSnippet: "Write a long-term fact into the project memory shared with ZCode (not a to-do)",
     parameters: memoryWriteParams,
     exposure: "direct",
