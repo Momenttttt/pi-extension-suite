@@ -10,12 +10,32 @@
  */
 import { createHash } from "node:crypto";
 
-import { isUserMessage, messageTimestampMs, type MessageLike } from "./messages.ts";
+import { isRecord, isUserMessage, messageTimestampMs, type MessageLike } from "./messages.ts";
 
 /** 会话条目与它投影出的消息组成的对（stub 类型的收窄形状，见 state/replay 的写法）。 */
 export interface ProjectedItem {
   entryId: string;
   message: MessageLike;
+}
+
+/**
+ * 条目是否可被 pi 的 `context_edit` 编辑。
+ *
+ * pi 的 `appendContextEdit` 只接受 `custom_message`，以及 role ∈ {user, assistant, toolResult}
+ * 的 `message` 条目；其余（`compaction`、`branch_summary`、system 消息、`custom`、`context_edit`
+ * 等）一律抛 `Invalid boundary entries: Entry … does not contribute editable model content`。
+ * 关键：拒绝是**整批**的——批次里混进一条不合格的，同一次 snip 的全部编辑都白做。
+ *
+ * 会被投影成模型内容、却不可编辑的条目正是压缩摘要（`compaction`）与 `branch_summary`，
+ * 所以"区间跨过一次自动压缩"就足以让整次裁剪失败。
+ */
+export function isContextEditable(entry: unknown): boolean {
+  if (!isRecord(entry)) return false;
+  if (entry.type === "custom_message") return true;
+  if (entry.type !== "message") return false;
+  const message = entry.message;
+  if (!isRecord(message)) return false;
+  return message.role === "user" || message.role === "assistant" || message.role === "toolResult";
 }
 
 /** 一条用户消息在投影里的位置与它的短 id。 */

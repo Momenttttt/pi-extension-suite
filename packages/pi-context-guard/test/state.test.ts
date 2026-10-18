@@ -137,6 +137,18 @@ describe("待提交队列", () => {
     state.drain(2);
     expect(state.activeSnipTargets()).toEqual(["e2"]);
   });
+
+  test("accept 剔除的待办直接丢弃，也不写进已裁剪视图", () => {
+    const state = new ContextGuardState();
+    state.queueSnip("e1", "aaaaaa");
+    state.queueSnip("e2", "bbbbbb");
+    // 只放行 e2（真身里放行谓词是"当前分支上可被 context_edit 的条目 id 集合"）
+    const drained = state.drain(1, (op) => op.entryId === "e2");
+    expect(drained.snips.map((op) => op.entryId)).toEqual(["e2"]);
+    expect(state.activeSnipTargets()).toEqual(["e2"]);
+    // e1 没落地也没记进"已裁剪"：否则 `/ctx` 会报出实际没生效的清理，撤销还会去恢复它
+    expect(state.pendingOps()).toHaveLength(0);
+  });
 });
 
 describe("从分支重建", () => {

@@ -1,6 +1,6 @@
 {
   "name": "@momenttttt/pi-context-guard",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Client-side context layers for pi: microcompact placeholders and model-driven history snipping",
   "license": "MIT",
   "type": "module",

@@ -10,6 +10,7 @@ import { isUserMessage, type MessageLike } from "../src/messages.ts";
 import {
   appendShortIdToContent,
   collectUserAnchors,
+  isContextEditable,
   resolveSnipTargets,
   shortIdOf,
   type ProjectedItem,
@@ -181,5 +182,25 @@ describe("消息形状守卫", () => {
     expect(isUserMessage({ role: "user" })).toBe(true);
     expect(isUserMessage({ role: "assistant" })).toBe(false);
     expect(isUserMessage({})).toBe(false);
+  });
+});
+
+describe("isContextEditable（pi 的 context_edit 白名单镜像）", () => {
+  // 与真身逐条对答案的是 test/context-edit-contract.test.ts；这里只钉住防御式解析的分支。
+  test("拒绝结构不认识的条目，而不是抛错", () => {
+    expect(isContextEditable(undefined)).toBe(false);
+    expect(isContextEditable(null)).toBe(false);
+    expect(isContextEditable("message")).toBe(false);
+    expect(isContextEditable({ type: "message" })).toBe(false);
+    expect(isContextEditable({ type: "message", message: { role: "user" } })).toBe(true);
+  });
+
+  test("只认三个 role：system 消息不算可编辑", () => {
+    for (const role of ["user", "assistant", "toolResult"]) {
+      expect(isContextEditable({ type: "message", message: { role } })).toBe(true);
+    }
+    for (const role of ["system", "", "tool_result"]) {
+      expect(isContextEditable({ type: "message", message: { role } })).toBe(false);
+    }
   });
 });

@@ -95,6 +95,9 @@ The idle trigger only acts after 60 minutes without activity, because the server
 **Why is the `snip` tool always visible to the model instead of being activated on demand?**
 Activating it on demand (registering it as `deferred` and switching it on with `pi.setActiveTools()` past a context threshold) **changes the tool list**. pi appends a record to the transcript when the tool set changes, and a provider that cannot express that increment receives a full checkpoint, which can **invalidate the cache prefix**. The saved prompt cost would be less than the loss from a cold cache. The price is a few dozen tokens of tool description per turn, which is acceptable.
 
+**Why does a snip leave a compaction summary in place?**
+Snip goes through pi's `context_edit`, which only accepts **messages**: a message with role `user`, `assistant` or `toolResult` (or an extension-authored custom message). A compaction summary is a top-level session entry rather than a message, so **it cannot be snipped at all**: a range that crosses an automatic compaction drops every message in it and leaves the summary standing. pi also validates such a batch as a whole, so the plugin filters the range against that rule before submitting, and a crossing range still applies to the messages it covers instead of the whole edit being rejected.
+
 **Why does a cleanup not clear pi-read-guard's read state?**
 Cleanup is an optimization of what the model is shown in this request; the world on disk has not changed. So the read-state table is **not** invalidated by it: even when a tool result has been replaced by a placeholder, the model still counts as having read that file. Should it edit the file on that basis, the mtime check is still the last line of defense.
 

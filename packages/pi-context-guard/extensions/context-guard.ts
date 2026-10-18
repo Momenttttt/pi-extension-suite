@@ -55,6 +55,7 @@ import {
 } from "../src/messages.ts";
 import {
   appendShortIdToContent,
+  isContextEditable,
   resolveSnipTargets,
   shortIdOf,
   type ProjectedItem,
@@ -96,10 +97,19 @@ const contextGuard: ExtensionFactory = (pi: ExtensionAPI): void => {
     clearMemoryResults: configNow.clearMemoryResults,
   });
 
+  /**
+   * 当前分支上 pi 允许 `context_edit` 的条目。
+   *
+   * 投影成 `items`（供短 id 解析）与提交前筛目标集**两处**都要用它：压缩摘要这类条目会投影成
+   * 模型内容、却不可编辑，一旦漏进区间，pi 会整批拒收（`Invalid boundary entries`），整次 snip 白做。
+   */
+  const editableBranchEntries = (ctx: ExtensionContext) =>
+    ctx.sessionManager.getBranch().filter((entry) => isContextEditable(entry));
+
   /** 当前分支投影成"条目 id + 消息"的对，短 id 解析与恢复原文都基于它。 */
   const branchItems = (ctx: ExtensionContext): ProjectedItem[] => {
     const items: ProjectedItem[] = [];
-    for (const entry of ctx.sessionManager.getBranch()) {
+    for (const entry of editableBranchEntries(ctx)) {
       for (const message of sessionEntryToContextMessages(entry)) {
         items.push({ entryId: entry.id, message: message as unknown as MessageLike });
       }
@@ -203,7 +213,10 @@ const contextGuard: ExtensionFactory = (pi: ExtensionAPI): void => {
   const commitBoundary = (ctx: ExtensionContext): BoundaryResult | undefined => {
     const entries: SessionBoundaryDraft[] = [];
     if (state.pendingOps().length > 0) {
-      const drained = state.drain(Date.now());
+      // 提交前再筛一道：会话文件里已存的旧 pending 条目（旧版本写下的、含压缩摘要这类
+      // 不可编辑 target）与切换分支后失效的 target，都不会再让整批提交被 pi 拒收。
+      const editable = new Set(editableBranchEntries(ctx).map((entry) => entry.id));
+      const drained = state.drain(Date.now(), (op) => editable.has(op.entryId));
       const snipEdits: ContextEditEntryDraft[] = drained.snips.map((op) => ({
         type: "context_edit",
         targetId: op.entryId,

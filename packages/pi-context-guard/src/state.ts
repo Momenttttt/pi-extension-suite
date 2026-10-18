@@ -116,13 +116,20 @@ export class ContextGuardState {
     return [...this.pending.values()];
   }
 
-  /** 取走待提交队列并更新"已裁剪"视图。 */
-  drain(now: number): DrainedOps {
+  /**
+   * 取走待提交队列并更新"已裁剪"视图。
+   *
+   * `accept` 用来剔除 pi 不会接受的 target（不在当前分支上、或条目类型不可编辑）：被剔除的待办
+   * 直接丢弃，**也不写进"已裁剪"视图**——否则 `/ctx` 会报出实际没生效的清理（pi 拒收整批时
+   * 曾经如此），撤销也会去恢复一批从未生效的条目。
+   */
+  drain(now: number, accept: (op: PendingOp) => boolean = () => true): DrainedOps {
     const ops = [...this.pending.values()];
     this.pending.clear();
     const snips: PendingOp[] = [];
     const restores: PendingOp[] = [];
     for (const op of ops) {
+      if (!accept(op)) continue;
       if (op.kind === "snip") {
         this.activeSnips.set(op.entryId, op.shortId ?? "");
         snips.push(op);

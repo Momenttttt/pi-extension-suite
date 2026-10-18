@@ -22,6 +22,7 @@ import {
   SessionManager,
   SettingsManager,
   type AgentSession,
+  type ExtensionError,
   type ExtensionFactory,
 } from "@earendil-works/pi-coding-agent";
 
@@ -96,12 +97,28 @@ export interface TestSessionOptions {
   resumeFrom?: string;
   /** 从内存里的条目起会话（避免碰磁盘）。 */
   inMemoryEntries?: unknown[];
+  /**
+   * 允许本轮出现扩展错误。
+   *
+   * 默认**不允许**：`run()` 会在本轮结束时检查有没有新的扩展错误，有就直接抛出。扩展抛错往往
+   * 正是用例要抓的病灶，而它在测试里本来是无声的（见 `TestSession.extensionErrors`）。
+   * 只有专门测错误路径的用例才传 `true`。
+   */
+  allowExtensionErrors?: boolean;
 }
 
 export interface TestSession {
   session: AgentSession;
   /** 桩 provider 依次收到的请求。 */
   requests: CapturedRequest[];
+  /**
+   * pi 报上来的扩展错误（`bindExtensions` 的 `onError` 载荷）。
+   *
+   * 扩展抛错在真机上只进 TUI 通知（`~/.pi/agent/crashes.json` 不收），测试里如果不接这个回调
+   * 就完全看不见：`turn_end` 的边界提交整批失败，而断言看到的只是"什么都没发生"。
+   * 接上之后，"本轮没有新错误"由 `run()` 默认把住（见 `allowExtensionErrors`）。
+   */
+  extensionErrors: ExtensionError[];
   /** 当前会话文件；用 `SessionManager.inMemory` 或还没写盘时为 undefined。 */
   sessionFile: () => string | undefined;
   /** 追加应答脚本（在调用 `run` 之前用）。 */
@@ -282,6 +299,7 @@ export async function createTestSession(options: TestSessionOptions): Promise<Te
   const { cwd } = options;
   const agentDir = options.agentDir ?? join(cwd, ".pi-agent");
   const requests: CapturedRequest[] = [];
+  const extensionErrors: ExtensionError[] = [];
   const script: StubStep[] = [...(options.responses ?? [])];
 
   const stubFactory: ExtensionFactory = (pi) => {
@@ -358,15 +376,27 @@ export async function createTestSession(options: TestSessionOptions): Promise<Te
   // 的宿主调用它。少了这一句，所有依赖 `session_start` 的扩展行为（读态重建、索引注入、
   // 工具冲突扫描）在测试里都不会发生，而 `tool_call` / `tool_result` 照常工作——
   // 表现为"测试通过但扩展没初始化"，非常难查。
-  await session.bindExtensions({});
+  //
+  // `onError` 是扩展抛错的唯一出口（`ExtensionBindings.onError`），宿主拿它写日志、弹通知；
+  // 不接就等同于把错误丢掉。
+  await session.bindExtensions({ onError: (error) => extensionErrors.push(error) });
 
   return {
     session,
     requests,
+    extensionErrors,
     sessionFile: () => session.sessionFile,
     pushResponses: (...steps: StubStep[]) => script.push(...steps),
     run: async (text: string) => {
+      const before = extensionErrors.length;
       await session.prompt(text);
+      const fresh = extensionErrors.slice(before);
+      if (fresh.length > 0 && options.allowExtensionErrors !== true) {
+        throw new Error(
+          `本轮出现 ${fresh.length} 条扩展错误（要允许的话给 createTestSession 传 allowExtensionErrors: true）：\n` +
+            fresh.map((error) => `  [${error.event}] ${error.extensionPath}: ${error.error}`).join("\n"),
+        );
+      }
       return session.getLastAssistantText() ?? "";
     },
     dispose: () => session.dispose(),
